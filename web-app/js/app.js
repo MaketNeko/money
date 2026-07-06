@@ -312,7 +312,7 @@
       <div class="set-head">สำรองข้อมูล</div>
       <button class="set-item" onclick="App.exportData()"><span class="ic">${icon('i-export')}</span><div class="body"><div class="t">ส่งออกข้อมูล (JSON)</div><div class="s">บันทึกไฟล์สำรองไว้เอง</div></div></button>
       <button class="set-item" onclick="App.importData()"><span class="ic">${icon('i-import')}</span><div class="body"><div class="t">นำเข้าข้อมูล (JSON)</div><div class="s">แทนที่ข้อมูลปัจจุบันด้วยไฟล์สำรอง</div></div></button>
-      <button class="set-item" onclick="App.resetData()"><span class="ic" style="color:var(--danger)">${icon('i-trash')}</span><div class="body"><div class="t">ล้างข้อมูลทั้งหมด</div><div class="s">กลับเป็นข้อมูลตัวอย่างเริ่มต้น</div></div></button>
+      <button class="set-item" onclick="App.resetData()"><span class="ic" style="color:var(--danger)">${icon('i-trash')}</span><div class="body"><div class="t">ล้างข้อมูลทั้งหมด</div><div class="s">ลบรายการ/บิล/หนี้ เริ่มต้นใหม่หน้าว่าง</div></div></button>
 
       <div class="divider"></div>
       <div class="set-head">เกี่ยวกับ</div>
@@ -652,7 +652,7 @@
     setTheme(v) { localStorage.setItem(S.THEME_KEY, v); applyTheme(v); renderSettings(); },
     exportData() { const blob = new Blob([S.exportJSON()], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `ngern-backup-${S.todayISO()}.json`; a.click(); URL.revokeObjectURL(a.href); toast('ส่งออกแล้ว'); },
     importData() { $('#importFile').click(); },
-    resetData() { if (confirm('ล้างข้อมูลทั้งหมดและกลับเป็นตัวอย่าง?')) { S.resetAll(); toast('ล้างข้อมูลแล้ว'); buildNav(); go('home'); } },
+    resetData() { if (confirm('ล้างข้อมูลทั้งหมด? รายการ/บิล/หนี้จะถูกลบ เริ่มต้นใหม่หน้าว่าง (หมวดหมู่+กระเป๋าเริ่มต้นยังอยู่)')) { S.resetAll(); toast('ล้างข้อมูลแล้ว'); buildNav(); go('home'); } },
 
     closeSheet() { $('#overlay').innerHTML = ''; add = bill = catEdit = debtE = wal = pay = null; for (const k in openFlags) delete openFlags[k]; },
     applyUpdate() { if (App._waiting) App._waiting.postMessage('skipWaiting'); $('#updateBanner').hidden = true; },

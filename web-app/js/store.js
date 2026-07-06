@@ -42,27 +42,14 @@
   ];
 
   function seedData() {
-    const t = todayISO();
-    const ym = t.slice(0, 8); // YYYY-MM-
+    // เริ่มต้นสะอาด: มีแค่หมวดหมู่ + กระเป๋าเริ่มต้น ไม่มีข้อมูลตัวอย่าง
     return {
       version: 2,
       categories: DEFAULT_CATEGORIES.map((c) => ({ ...c })),
       wallets: DEFAULT_WALLETS.map((w) => ({ ...w })),
-      transactions: [
-        { id: uid('t'), type: 'income', amount: 25000, categoryId: 'c_salary', walletId: 'w_bank', date: ym + '01', note: 'เงินเดือน' },
-        { id: uid('t'), type: 'expense', amount: 700, categoryId: 'c_travel', walletId: 'w_bank', date: ym + '03', note: 'เติมน้ำมัน' },
-        { id: uid('t'), type: 'expense', amount: 248, categoryId: 'c_shop', walletId: 'w_cash', date: ym + '03', note: '7-Eleven' },
-        { id: uid('t'), type: 'expense', amount: 55, categoryId: 'c_food', walletId: 'w_cash', date: ym + '04', note: 'ข้าวมันไก่' },
-      ],
-      bills: [
-        { id: uid('b'), name: 'ค่าเช่าหอ', amount: 4500, variable: false, categoryId: 'c_home', dueDay: 1, reminderDays: [3, 1], enabled: true, paidMonths: [] },
-        { id: uid('b'), name: 'ค่าเน็ต AIS', amount: 590, variable: false, categoryId: 'c_bill', dueDay: 5, reminderDays: [3, 1], enabled: true, paidMonths: [] },
-        { id: uid('b'), name: 'ค่าไฟ', amount: null, variable: true, categoryId: 'c_bill', dueDay: 15, reminderDays: [1], enabled: true, paidMonths: [] },
-      ],
-      debts: [
-        { id: uid('d'), kind: 'iowe', person: 'เพื่อน', principal: 3000, note: 'ยืมค่าเทอม', date: ym + '01', startWalletId: null,
-          payments: [{ id: uid('p'), amount: 1000, date: ym + '05', walletId: 'w_cash', note: '' }] },
-      ],
+      transactions: [],
+      bills: [],
+      debts: [],
       settings: { reminderTime: '20:00', defaultWalletId: 'w_cash', mode: 'simple' },
     };
   }
