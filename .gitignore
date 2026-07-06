@@ -1,0 +1,17 @@
+# Flutter / Dart (โค้ดเดิม เก็บไว้อ้างอิง)
+.dart_tool/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# OS / editor
+Thumbs.db
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# misc
+node_modules/
+*.log
