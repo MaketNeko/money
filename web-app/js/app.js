@@ -34,7 +34,15 @@
   const hist = { mode: 'month', y: now.getFullYear(), m: now.getMonth(), start: '', end: '' };
   let add = null, bill = null, catEdit = null, debtE = null, wal = null, pay = null;
   let catType = 'expense';
+  let deferredPrompt = null;
   const openFlags = {};
+
+  const isStandalone = () => matchMedia('(display-mode: standalone)').matches || (('standalone' in navigator) && navigator.standalone);
+  const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent || '');
+  function maybeShowInstall() {
+    if (isStandalone() || localStorage.getItem('ngern.installDismissed')) return;
+    if (deferredPrompt || isIOS()) $('#installBanner').hidden = false;
+  }
 
   /* =========================================================
      NAV
@@ -315,8 +323,14 @@
       <button class="set-item" onclick="App.resetData()"><span class="ic" style="color:var(--danger)">${icon('i-trash')}</span><div class="body"><div class="t">ล้างข้อมูลทั้งหมด</div><div class="s">ลบรายการ/บิล/หนี้ เริ่มต้นใหม่หน้าว่าง</div></div></button>
 
       <div class="divider"></div>
+      <div class="set-head">แอป</div>
+      ${isStandalone()
+        ? `<div class="set-item"><span class="ic" style="color:var(--income)">${icon('i-check')}</span><div class="body"><div class="t">ติดตั้งแล้ว</div><div class="s">เปิดจากหน้าจอโฮม ใช้ออฟไลน์ได้</div></div></div>`
+        : `<button class="set-item" onclick="App.installApp()"><span class="ic">${icon('i-import')}</span><div class="body"><div class="t">ติดตั้งแอปลงเครื่อง</div><div class="s">เพิ่มลงหน้าจอโฮม · เปิดเร็ว · ใช้ออฟไลน์ได้</div></div>${icon('i-chev', 'sm')}</button>`}
+
+      <div class="divider"></div>
       <div class="set-head">เกี่ยวกับ</div>
-      <div class="set-item"><div class="body"><div class="t">เงินของฉัน · เวอร์ชัน 0.2</div><div class="s">ข้อมูลเก็บในเครื่อง ไม่มี server</div></div></div>
+      <div class="set-item"><div class="body"><div class="t">เงินของฉัน · เวอร์ชัน 0.2</div><div class="s">ข้อมูลเก็บในเครื่อง ไม่มี server · ใช้ออฟไลน์ได้</div></div></div>
       <input type="file" id="importFile" accept="application/json,.json" hidden>`;
     $('#importFile').addEventListener('change', onImportFile);
   }
@@ -504,6 +518,16 @@
     sheetWrap(inner, 'pay');
   }
 
+  function renderIosInstall() {
+    const inner = `<h1 style="font-size:18px;margin-bottom:2px">ติดตั้งลงหน้าจอโฮม</h1>
+      <div class="s-mut" style="font-size:13px;margin-bottom:6px">บน iPhone / iPad — เปิดด้วย Safari แล้วทำตามนี้</div>
+      <div class="step"><span class="n">1</span><div class="d">แตะปุ่ม <b>แชร์</b> ${icon('i-export', 'sm')} ที่แถบด้านล่างของ Safari</div></div>
+      <div class="step"><span class="n">2</span><div class="d">เลื่อนหาแล้วแตะ <b>“เพิ่มลงในหน้าจอโฮม”</b><br><small>Add to Home Screen</small></div></div>
+      <div class="step"><span class="n">3</span><div class="d">แตะ <b>“เพิ่ม”</b> มุมขวาบน — เสร็จ! ไอคอนแอปจะอยู่หน้าจอโฮม เปิดใช้ออฟไลน์ได้</div></div>
+      <button class="btn-primary" onclick="App.closeSheet()">เข้าใจแล้ว</button>`;
+    sheetWrap(inner, 'ios');
+  }
+
   /* ---------- overlay + toast ---------- */
   function sheetWrap(inner, key) {
     const first = !openFlags[key]; openFlags[key] = true;
@@ -656,6 +680,21 @@
 
     closeSheet() { $('#overlay').innerHTML = ''; add = bill = catEdit = debtE = wal = pay = null; for (const k in openFlags) delete openFlags[k]; },
     applyUpdate() { if (App._waiting) App._waiting.postMessage('skipWaiting'); $('#updateBanner').hidden = true; },
+
+    // install (PWA)
+    async installApp() {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        deferredPrompt = null; $('#installBanner').hidden = true;
+        toast(outcome === 'accepted' ? 'กำลังติดตั้ง…' : 'ยกเลิกการติดตั้ง');
+        if (current === 'settings') renderSettings();
+        return;
+      }
+      if (isIOS()) { renderIosInstall(); return; }
+      toast('เปิดเมนู ⋮ ของเบราว์เซอร์ แล้วเลือก “ติดตั้งแอป”');
+    },
+    dismissInstall() { localStorage.setItem('ngern.installDismissed', '1'); $('#installBanner').hidden = true; },
     _waiting: null,
   };
   function closeSheet() { App.closeSheet(); }
@@ -675,6 +714,11 @@
   applyTheme(localStorage.getItem(S.THEME_KEY) || 'system');
   matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => { if ((localStorage.getItem(S.THEME_KEY) || 'system') === 'system') applyTheme('system'); });
   go('home');
+
+  // PWA install prompt
+  window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredPrompt = e; maybeShowInstall(); if (current === 'settings') renderSettings(); });
+  window.addEventListener('appinstalled', () => { deferredPrompt = null; $('#installBanner').hidden = true; toast('ติดตั้งแล้ว ✓'); if (current === 'settings') renderSettings(); });
+  setTimeout(maybeShowInstall, 1500);
 
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).then((reg) => {

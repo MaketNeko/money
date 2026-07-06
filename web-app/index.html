@@ -92,6 +92,12 @@
   <span class="txt">มีเวอร์ชันใหม่</span>
   <button onclick="App.applyUpdate()">อัปเดต</button>
 </div>
+<div class="install-banner" id="installBanner" hidden>
+  <span class="ic"><svg class="i"><use href="#i-import"/></svg></span>
+  <div class="txt"><b>ติดตั้งแอปลงเครื่อง</b><span>เปิดเร็ว ใช้ออฟไลน์ได้ เหมือนแอปจริง</span></div>
+  <button class="go" onclick="App.installApp()">ติดตั้ง</button>
+  <button class="x" onclick="App.dismissInstall()" aria-label="ปิด">✕</button>
+</div>
 
 <script src="./js/store.js"></script>
 <script src="./js/app.js"></script>
