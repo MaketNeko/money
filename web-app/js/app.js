@@ -20,6 +20,11 @@
   /* ---------- บันทึกการอัปเดต (แสดงในตั้งค่า > เกี่ยวกับ) ----------
      ทุกครั้งที่อัปเดตแอป เพิ่มรายการใหม่ไว้บนสุด */
   const CHANGELOG = [
+    { v: '0.4', date: '7 ก.ค. 2569', items: [
+      'แก้บั๊ก: แปลง/ถอนเงินต่างประเทศเข้าไทย คำนวณยอดบาทให้อัตโนมัติจากเรต (เงินเข้ากระเป๋า+ประวัติถูกต้อง)',
+      'แก้บั๊ก: สวิตช์ “จำนวนผันแปร” ในบิลไม่ขยับ',
+      'แก้บั๊ก: หน้าหมวดหมู่ ชื่อที่พิมพ์หายเมื่อกดเลือกไอคอน/สี/สวิตช์ภาษี',
+    ] },
     { v: '0.3', date: '7 ก.ค. 2569', items: [
       'เพิ่มชุดสี “ธีมดวงดาว” ✦ (กลางคืน/กลางวัน) เลือกได้ในตั้งค่า',
       'แก้บั๊ก: หน้าลงเงินในธีมมืดโปร่งใสจนอ่านยาก',
@@ -636,7 +641,7 @@
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><h1 style="font-size:18px">${bill.id ? 'แก้ไขบิล' : 'เพิ่มบิล'}</h1>
         ${bill.id ? `<button class="icon-btn" style="color:var(--danger)" onclick="App.deleteBill()">${icon('i-trash')}</button>` : ''}</div>
       <div class="field-label">ชื่อบิล</div><input class="input" id="billName" value="${esc(bill.name)}" placeholder="เช่น ค่าเน็ต AIS">
-      <div class="switch-row"><div class="txt"><div class="t">จำนวนผันแปร</div><div class="s">เช่น ค่าไฟ ค่าน้ำ ที่ไม่เท่ากันทุกเดือน</div></div><button class="sw-ui ${bill.variable ? 'on' : ''}" onclick="App.billVar()"></button></div>
+      <div class="switch-row"><div class="txt"><div class="t">จำนวนผันแปร</div><div class="s">เช่น ค่าไฟ ค่าน้ำ ที่ไม่เท่ากันทุกเดือน</div></div><button id="swVar" class="sw-ui ${bill.variable ? 'on' : ''}" onclick="App.billVar()"></button></div>
       <div id="amtField" ${bill.variable ? 'hidden' : ''}><div class="field-label">จำนวนเงิน</div><input class="input num" id="billAmount" inputmode="decimal" value="${bill.amount != null ? bill.amount : ''}" placeholder="0"></div>
       <div class="field-label">หมวดหมู่</div><div class="wrap-chips">${catChips}</div>
       <div class="field-label">ครบกำหนดทุกวันที่ <b id="dueLbl">${bill.dueDay}</b> ของเดือน</div>
@@ -663,10 +668,11 @@
       <div class="field-label">ชื่อหมวด</div><input class="input" id="catName" value="${esc(catEdit.name)}" placeholder="เช่น กาแฟ">
       <div class="field-label">ไอคอน</div><div class="chips" style="flex-wrap:wrap">${icons}</div>
       <div class="field-label">สี</div><div class="wrap-chips" style="gap:10px">${colors}</div>
-      ${catEdit.type === 'income' && S.settings().taxEnabled ? `<div class="switch-row" style="margin-top:8px"><div class="txt"><div class="t">นับเป็นรายได้ภาษี</div><div class="s">รายได้จากหมวดนี้จะถูกนำไปคำนวณ PIT</div></div><button class="sw-ui ${catEdit.isTaxable ? 'on' : ''}" onclick="App.catTaxable()"></button></div>` : ''}
+      ${catEdit.type === 'income' && S.settings().taxEnabled ? `<div class="switch-row" style="margin-top:8px"><div class="txt"><div class="t">นับเป็นรายได้ภาษี</div><div class="s">รายได้จากหมวดนี้จะถูกนำไปคำนวณ PIT</div></div><button id="swCatTax" class="sw-ui ${catEdit.isTaxable ? 'on' : ''}" onclick="App.catTaxable()"></button></div>` : ''}
       <button class="btn-primary" onclick="App.saveCat(${fa})">บันทึก</button>`;
     sheetWrap(inner, 'cat');
   }
+  function catCapture() { const n = $('#catName'); if (n) catEdit.name = n.value; }
 
   /* =========================================================
      WALLET EDIT
@@ -859,7 +865,7 @@
     quickAddCat() { editCat(); catEdit.type = add.type; catEdit._fromAdd = true; renderCatEdit(); },
 
     // bill
-    billVar() { bill.variable = !bill.variable; const f = $('#amtField'); if (f) f.hidden = bill.variable; },
+    billVar() { bill.variable = !bill.variable; const f = $('#amtField'); if (f) f.hidden = bill.variable; const sw = $('#swVar'); if (sw) sw.classList.toggle('on', bill.variable); },
     billCat(id) { bill.categoryId = id; renderBillEdit(); },
     billDue(v) { bill.dueDay = Number(v); $('#dueLbl').textContent = v; },
     billEnabled() { bill.enabled = !bill.enabled; renderBillEdit(); },
@@ -874,7 +880,7 @@
     },
     deleteBill() { if (confirm('ลบบิลนี้?')) { S.deleteBill(bill.id); closeSheet(); toast('ลบบิลแล้ว'); render('bills'); } },
 
-    catTaxable() { catEdit.isTaxable = !catEdit.isTaxable; renderCatEdit(); },
+    catTaxable() { catCapture(); catEdit.isTaxable = !catEdit.isTaxable; const sw = $('#swCatTax'); if (sw) sw.classList.toggle('on', catEdit.isTaxable); },
 
     // categories
     catType(t) { catType = t; renderCategories(); },
@@ -886,8 +892,8 @@
       if (!used && !confirm('ลบหมวดนี้?')) return;
       S.deleteCategory(id); renderCategories();
     },
-    catPickIcon(ic) { catEdit.icon = ic; renderCatEdit(); },
-    catPickColor(col) { catEdit.color = col; renderCatEdit(); },
+    catPickIcon(ic) { catCapture(); catEdit.icon = ic; renderCatEdit(); },
+    catPickColor(col) { catCapture(); catEdit.color = col; renderCatEdit(); },
     saveCat(fromAdd) {
       const name = $('#catName').value.trim(); if (!name) { toast('ใส่ชื่อหมวดก่อน'); return; }
       if (catEdit.id) S.updateCategory(catEdit.id, { name, icon: catEdit.icon, color: catEdit.color, isTaxable: !!catEdit.isTaxable });
@@ -923,7 +929,20 @@
 
     // FX convert
     openFXConvert,
-    _fxSync(k, v) { if (fxConvert) fxConvert[k] = v; },
+    _fxSync(k, v) {
+      if (!fxConvert) return;
+      fxConvert[k] = v;
+      // auto-คำนวณยอดที่ได้รับจาก จำนวน × เรต (ถอน) หรือ จำนวน ÷ เรต (ฝาก) — แก้เองทีหลังได้เผื่อหักค่าธรรมเนียม
+      if (k === 'fromAmount' || k === 'fxRate') {
+        const from = parseFloat(fxConvert.fromAmount) || 0;
+        const rate = parseFloat(fxConvert.fxRate) || 0;
+        if (from > 0 && rate > 0) {
+          const calc = Math.round((fxConvert.dir === 'in' ? from * rate : from / rate) * 100) / 100;
+          fxConvert.toAmount = String(calc);
+          const el = $('#fxTo'); if (el) el.value = calc;
+        }
+      }
+    },
     fxSetDir(dir) { if (fxConvert) { fxConvert.dir = dir === 'out' ? 'out' : 'in'; renderFXConvert(); } },
     fxPick(k, v) { if (fxConvert) { fxConvert[k] = v; renderFXConvert(); } },
     fxToggleTaxable() { if (fxConvert) { fxConvert.taxable = !fxConvert.taxable; renderFXConvert(); } },
