@@ -16,6 +16,19 @@
 
   const MONTHS_FULL = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
     'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
+
+  /* ---------- บันทึกการอัปเดต (แสดงในตั้งค่า > เกี่ยวกับ) ----------
+     ทุกครั้งที่อัปเดตแอป เพิ่มรายการใหม่ไว้บนสุด */
+  const CHANGELOG = [
+    { v: '0.3', date: '7 ก.ค. 2569', items: [
+      'เพิ่มชุดสี “ธีมดวงดาว” ✦ (กลางคืน/กลางวัน) เลือกได้ในตั้งค่า',
+      'แก้บั๊ก: หน้าลงเงินในธีมมืดโปร่งใสจนอ่านยาก',
+    ] },
+    { v: '0.2', date: '6 ก.ค. 2569', items: [
+      'เพิ่มระบบติดตั้งแอป (PWA) ลงเครื่อง ใช้ออฟไลน์ได้',
+    ] },
+  ];
+  const APP_VERSION = CHANGELOG[0].v;
   const MONTHS_SHORT = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
   const thYear = (y) => y + 543;
   const monthLabel = (y, m0) => `${MONTHS_FULL[m0]} ${thYear(y)}`;
@@ -527,7 +540,13 @@
 
       <div class="divider"></div>
       <div class="set-head">เกี่ยวกับ</div>
-      <div class="set-item"><div class="body"><div class="t">เงินของฉัน · เวอร์ชัน 0.2</div><div class="s">ข้อมูลเก็บในเครื่อง ไม่มี server · ใช้ออฟไลน์ได้</div></div></div>
+      <div class="set-item"><div class="body"><div class="t">เงินของฉัน · เวอร์ชัน ${APP_VERSION}</div><div class="s">ข้อมูลเก็บในเครื่อง ไม่มี server · ใช้ออฟไลน์ได้</div></div></div>
+      <div class="set-head">มีอะไรใหม่</div>
+      ${CHANGELOG.map((c) => `
+        <div class="changelog">
+          <div class="cl-head"><span class="cl-ver">v${c.v}</span><span class="cl-date">${c.date}</span></div>
+          <ul class="cl-list">${c.items.map((it) => `<li>${esc(it)}</li>`).join('')}</ul>
+        </div>`).join('')}
       <input type="file" id="importFile" accept="application/json,.json" hidden>`;
     $('#importFile').addEventListener('change', onImportFile);
   }

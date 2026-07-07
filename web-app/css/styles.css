@@ -21,7 +21,7 @@
    ทำงานสองแกน: [data-palette="star"] × [data-theme=light|dark]
    =========================================================== */
 [data-palette="star"] {                 /* star · โหมดกลางคืน (default) */
-  --base:#0B1730; --surface:rgba(255,255,255,.06); --surface-hi:rgba(255,255,255,.11);
+  --base:#0B1730; --surface:rgba(255,255,255,.06); --surface-hi:#1A2745;
   --divider:rgba(255,255,255,.14);
   --ink:#F5F7FF; --muted:#9FB3DE; --trust:#FFC200; --on-trust:#10254B;
   --income:#34D399; --expense:#FB923C; --danger:#F87171;
@@ -253,6 +253,15 @@ button { font-family:inherit; }
 .set-item .ic { color:var(--trust); display:flex; }
 .set-item .body { flex:1; } .set-item .body .t { font-size:15px; } .set-item .body .s { color:var(--muted); font-size:12px; margin-top:2px; }
 .divider { height:1px; background:var(--divider); margin:6px 0; }
+
+/* ---------- changelog (เกี่ยวกับ > มีอะไรใหม่) ---------- */
+.changelog { background:var(--surface); border-radius:14px; padding:12px 14px; margin-top:8px; }
+.cl-head { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+.cl-ver { font-family:var(--font-num); font-size:13px; font-weight:600; color:var(--trust); }
+.cl-date { font-size:12px; color:var(--muted); }
+.cl-list { list-style:none; display:flex; flex-direction:column; gap:4px; }
+.cl-list li { position:relative; padding-left:16px; font-size:14px; color:var(--ink); line-height:1.45; }
+.cl-list li::before { content:""; position:absolute; left:4px; top:9px; width:5px; height:5px; border-radius:50%; background:var(--trust); }
 
 /* ---------- manage categories ---------- */
 .cat-row { display:flex; align-items:center; gap:10px; background:var(--surface); border-radius:14px; padding:10px 12px; margin-top:8px; }
