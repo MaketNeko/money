@@ -1,6 +1,6 @@
 // Service worker — network-first (ออนไลน์ได้ล่าสุดเสมอ, ออฟไลน์ fallback แคช)
 // เด้งเลข CACHE ทุกครั้งที่ deploy เพื่อเคลียร์แคชเก่า
-const CACHE = 'ngern-v3';
+const CACHE = 'ngern-v4';
 const SHELL = [
   './',
   './index.html',

@@ -21,6 +21,7 @@
      ทุกครั้งที่อัปเดตแอป เพิ่มรายการใหม่ไว้บนสุด */
   const CHANGELOG = [
     { v: '0.4', date: '7 ก.ค. 2569', items: [
+      'เพิ่มปุ่ม “ตรวจหาอัปเดต” แบบแมนนวลในตั้งค่า > เกี่ยวกับ',
       'แก้บั๊ก: แปลง/ถอนเงินต่างประเทศเข้าไทย คำนวณยอดบาทให้อัตโนมัติจากเรต (เงินเข้ากระเป๋า+ประวัติถูกต้อง)',
       'แก้บั๊ก: สวิตช์ “จำนวนผันแปร” ในบิลไม่ขยับ',
       'แก้บั๊ก: หน้าหมวดหมู่ ชื่อที่พิมพ์หายเมื่อกดเลือกไอคอน/สี/สวิตช์ภาษี',
@@ -54,6 +55,7 @@
   let add = null, bill = null, catEdit = null, debtE = null, wal = null, pay = null, fxConvert = null;
   let catType = 'expense', taxCatOpen = false, taxDedOpen = false;
   let deferredPrompt = null;
+  let swReg = null;
   const openFlags = {};
 
   const isStandalone = () => matchMedia('(display-mode: standalone)').matches || (('standalone' in navigator) && navigator.standalone);
@@ -546,6 +548,7 @@
       <div class="divider"></div>
       <div class="set-head">เกี่ยวกับ</div>
       <div class="set-item"><div class="body"><div class="t">เงินของฉัน · เวอร์ชัน ${APP_VERSION}</div><div class="s">ข้อมูลเก็บในเครื่อง ไม่มี server · ใช้ออฟไลน์ได้</div></div></div>
+      <button class="set-item" onclick="App.checkUpdate()"><span class="ic">${icon('i-transfer')}</span><div class="body"><div class="t">ตรวจหาอัปเดต</div><div class="s">เช็กเวอร์ชันใหม่แบบแมนนวล</div></div>${icon('i-chev', 'sm')}</button>
       <div class="set-head">มีอะไรใหม่</div>
       ${CHANGELOG.map((c) => `
         <div class="changelog">
@@ -1019,6 +1022,19 @@
 
     closeSheet() { $('#overlay').innerHTML = ''; add = bill = catEdit = debtE = wal = pay = fxConvert = null; for (const k in openFlags) delete openFlags[k]; },
     applyUpdate() { if (App._waiting) App._waiting.postMessage('skipWaiting'); $('#updateBanner').hidden = true; },
+    async checkUpdate() {
+      if (!('serviceWorker' in navigator) || !swReg) { toast('อุปกรณ์นี้ไม่รองรับตรวจอัปเดตอัตโนมัติ'); return; }
+      toast('กำลังตรวจหาอัปเดต…');
+      try {
+        await swReg.update();
+        if (swReg.installing || swReg.waiting) {
+          if (swReg.waiting && navigator.serviceWorker.controller) { App._waiting = swReg.waiting; $('#updateBanner').hidden = false; }
+          toast('พบเวอร์ชันใหม่ · กด “อัปเดต” ด้านบน');
+        } else {
+          toast('เป็นเวอร์ชันล่าสุดแล้ว ✓');
+        }
+      } catch (e) { toast('ตรวจสอบไม่สำเร็จ — ลองใหม่อีกครั้ง'); }
+    },
 
     // install (PWA)
     async installApp() {
@@ -1061,6 +1077,8 @@
 
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).then((reg) => {
+      swReg = reg;
+      if (reg.waiting && navigator.serviceWorker.controller) { App._waiting = reg.waiting; $('#updateBanner').hidden = false; }
       reg.addEventListener('updatefound', () => {
         const nw = reg.installing;
         nw && nw.addEventListener('statechange', () => {
