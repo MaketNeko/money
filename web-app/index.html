@@ -6,14 +6,14 @@
 <meta name="theme-color" content="#0E1613">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="เงินของฉัน">
-<title>เงินของฉัน</title>
+<meta name="apple-mobile-web-app-title" content="Cash Manager">
+<title>Neko Cash Manager</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="apple-touch-icon" href="./icon.svg">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=Lexend:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=Lexend:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="./css/styles.css">
 </head>
 <body>
@@ -58,9 +58,20 @@
   <symbol id="i-transfer" viewBox="0 0 24 24"><polyline points="17 2 21 6 17 10"/><path d="M3 6h18"/><polyline points="7 22 3 18 7 14"/><path d="M21 18H3"/></symbol>
   <symbol id="i-users" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
   <symbol id="i-check" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></symbol>
 </svg>
 
 <div class="app">
+  <!-- ท้องฟ้าดวงดาว (แสดงเฉพาะชุดสี "ดวงดาว") -->
+  <div class="sky" aria-hidden="true">
+    <div class="neb neb1"></div>
+    <div class="neb neb2"></div>
+    <span class="tw tw1">✦</span>
+    <span class="tw tw2">✧</span>
+    <span class="tw tw3">✧</span>
+  </div>
+
   <!-- appbar -->
   <div class="appbar">
     <span class="back" id="appbarLeft"><h1 id="appTitle">หน้าหลัก</h1></span>
@@ -72,6 +83,7 @@
   <div class="screen" id="screen-history" data-screen="history" hidden></div>
   <div class="screen" id="screen-bills" data-screen="bills" hidden></div>
   <div class="screen" id="screen-debt" data-screen="debt" hidden></div>
+  <div class="screen" id="screen-tax" data-screen="tax" hidden></div>
   <div class="screen" id="screen-wallets" data-screen="wallets" hidden></div>
   <div class="screen" id="screen-categories" data-screen="categories" hidden></div>
   <div class="screen" id="screen-settings" data-screen="settings" hidden></div>

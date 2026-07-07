@@ -8,6 +8,7 @@
 
   const DATA_KEY = 'ngern.data.v1';
   const THEME_KEY = 'ngern.theme';
+  const PALETTE_KEY = 'ngern.palette'; // 'default' | 'star'
 
   const uid = (p) =>
     (p || 'id') + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -37,8 +38,10 @@
   ];
 
   const DEFAULT_WALLETS = [
-    { id: 'w_cash', name: 'เงินสด', icon: 'i-wallet', color: '#34D399', openingBalance: 0, order: 0 },
-    { id: 'w_bank', name: 'ธนาคาร', icon: 'i-bank', color: '#60A5FA', openingBalance: 0, order: 1 },
+    { id: 'w_cash', name: 'เงินสด', icon: 'i-wallet', color: '#34D399', currency: 'THB', enabled: true, openingBalance: 0, order: 0 },
+    { id: 'w_bank', name: 'ธนาคาร', icon: 'i-bank', color: '#60A5FA', currency: 'THB', enabled: true, openingBalance: 0, order: 1 },
+    { id: 'w_payoneer', name: 'Payoneer', icon: 'i-brief', color: '#FF4800', currency: 'USD', enabled: true, openingBalance: 0, order: 2 },
+    { id: 'w_patreon', name: 'Patreon', icon: 'i-gift', color: '#FF424D', currency: 'USD', enabled: true, openingBalance: 0, order: 3 },
   ];
 
   function seedData() {
@@ -50,7 +53,8 @@
       transactions: [],
       bills: [],
       debts: [],
-      settings: { reminderTime: '20:00', defaultWalletId: 'w_cash', mode: 'simple' },
+      foreignIncome: [],
+      settings: { reminderTime: '20:00', defaultWalletId: 'w_cash', mode: 'simple', taxEnabled: false, foreignIncomeEnabled: false, fxWalletsSeeded: true, taxYear: new Date().getFullYear(), taxDeductions: { socialSecurity: 0, lifeInsurance: 0, rmf: 0, parents: 0, donation: 0 } },
     };
   }
 
@@ -72,7 +76,23 @@
     if (!data.settings.defaultWalletId) data.settings.defaultWalletId = data.wallets[0].id;
     if (!data.settings.mode) data.settings.mode = 'simple';
     if (!Array.isArray(data.debts)) data.debts = [];
+    if (!Array.isArray(data.foreignIncome)) data.foreignIncome = [];
+    if (data.settings.taxEnabled == null) data.settings.taxEnabled = false;
+    if (data.settings.foreignIncomeEnabled == null) data.settings.foreignIncomeEnabled = false;
+    if (!data.settings.taxYear) data.settings.taxYear = new Date().getFullYear();
+    if (!data.settings.taxDeductions) data.settings.taxDeductions = { socialSecurity: 0, lifeInsurance: 0, rmf: 0, parents: 0, donation: 0 };
     for (const t of data.transactions || []) if (!t.walletId) t.walletId = data.settings.defaultWalletId;
+    for (const w of data.wallets || []) {
+      if (w.currency == null) w.currency = 'THB';
+      if (w.enabled == null) w.enabled = true;
+    }
+    // seed กระเป๋า USD เริ่มต้นครั้งเดียว (ผู้ใช้เก่าที่ยังไม่เคยได้รับ) — หลัง seed แล้วลบได้ถาวร
+    if (!data.settings.fxWalletsSeeded) {
+      for (const dw of [{ id: 'w_payoneer', name: 'Payoneer', icon: 'i-brief', color: '#FF4800', currency: 'USD', enabled: true, openingBalance: 0 }, { id: 'w_patreon', name: 'Patreon', icon: 'i-gift', color: '#FF424D', currency: 'USD', enabled: true, openingBalance: 0 }]) {
+        if (!data.wallets.find((w) => w.id === dw.id)) { data.wallets.push({ ...dw, order: data.wallets.length }); }
+      }
+      data.settings.fxWalletsSeeded = true;
+    }
     data.version = 2;
   }
   migrate();
@@ -118,7 +138,7 @@
       else if (t.type === 'expense' && t.walletId === id) b -= t.amount;
       else if (t.type === 'transfer') {
         if (t.walletId === id) b -= t.amount;
-        if (t.toWalletId === id) b += t.amount;
+        if (t.toWalletId === id) b += (t.toAmount != null ? t.toAmount : t.amount);
       }
     }
     for (const d of data.debts) {
@@ -130,7 +150,7 @@
     }
     return b;
   }
-  function totalBalance() { return data.wallets.reduce((a, w) => a + walletBalance(w.id), 0); }
+  function totalBalance() { return data.wallets.filter((w) => (w.currency || 'THB') === 'THB').reduce((a, w) => a + walletBalance(w.id), 0); }
 
   /* ---------- debts ---------- */
   const debtPaid = (d) => (d.payments || []).reduce((a, p) => a + p.amount, 0);
@@ -162,11 +182,47 @@
       .sort((a, b) => a.daysLeft - b.daysLeft);
   }
 
+  /* ---------- tax ---------- */
+  function calcPIT(net) {
+    if (net <= 0) return 0;
+    const brackets = [[150000, 0], [300000, 0.05], [500000, 0.10], [750000, 0.15], [1000000, 0.20], [2000000, 0.25], [5000000, 0.30], [Infinity, 0.35]];
+    let tax = 0, prev = 0;
+    for (const [limit, rate] of brackets) {
+      if (net <= prev) break;
+      tax += (Math.min(net, limit) - prev) * rate;
+      prev = limit;
+    }
+    return Math.round(tax);
+  }
+  function taxSummary(year) {
+    const y = year || data.settings.taxYear || new Date().getFullYear();
+    const ded = data.settings.taxDeductions || {};
+    // นับเฉพาะรายรับที่อยู่ในกระเป๋า THB เท่านั้น (รายได้ต่างประเทศจะถูกนับตอน "โอนเข้าไทย" = สร้างรายรับ THB)
+    const thbWalletIds = new Set(data.wallets.filter((w) => (w.currency || 'THB') === 'THB').map((w) => w.id));
+    const inYear = (d) => d >= `${y}-01-01` && d <= `${y}-12-31`;
+    const txs = data.transactions.filter((t) => t.type === 'income' && thbWalletIds.has(t.walletId) && inYear(t.date));
+    const taxableTHB = txs.reduce((s, t) => { const c = catById(t.categoryId); return c && c.isTaxable ? s + t.amount : s; }, 0);
+    // รายได้ต่างประเทศที่โอนเข้าไทย (remit transfer เข้ากระเป๋า THB, หมวดที่ tag ภาษี) — นับยอด THB ปลายทาง
+    const remitTHB = data.transactions.reduce((s, t) => {
+      if (t.type !== 'transfer' || !t.remit || !thbWalletIds.has(t.toWalletId) || !inYear(t.date)) return s;
+      const c = catById(t.categoryId); if (!c || !c.isTaxable) return s;
+      return s + (t.toAmount != null ? t.toAmount : t.amount);
+    }, 0);
+    const totalIncome = taxableTHB + remitTHB;
+    const expenseDeduction = Math.min(totalIncome * 0.5, 100000);
+    const personalDeduction = 60000;
+    const otherDeductions = (ded.socialSecurity || 0) + (ded.lifeInsurance || 0) + (ded.rmf || 0) + (ded.parents || 0) + (ded.donation || 0);
+    const totalDeductions = expenseDeduction + personalDeduction + otherDeductions;
+    const netIncome = Math.max(0, totalIncome - totalDeductions);
+    return { taxableTHB, remitTHB, totalIncome, expenseDeduction, personalDeduction, otherDeductions, totalDeductions, netIncome, estimatedTax: calcPIT(netIncome), year: y };
+  }
+
   /* =========================================================
      PUBLIC API
      ========================================================= */
   const Store = {
     THEME_KEY,
+    PALETTE_KEY,
     all: () => data,
 
     // categories
@@ -180,7 +236,7 @@
     defaultWalletId: () => data.settings.defaultWalletId,
     addWallet(w) {
       const order = data.wallets.length;
-      const rec = { id: uid('w'), name: w.name, icon: w.icon || 'i-wallet', color: w.color || '#34D399', openingBalance: Number(w.openingBalance) || 0, order };
+      const rec = { id: uid('w'), name: w.name, icon: w.icon || 'i-wallet', color: w.color || '#34D399', currency: w.currency || 'THB', enabled: true, openingBalance: Number(w.openingBalance) || 0, order };
       data.wallets.push(rec); persist(); return rec;
     },
     updateWallet(id, patch) { const w = walletById(id); if (w) { Object.assign(w, patch); if (patch.openingBalance != null) w.openingBalance = Number(patch.openingBalance) || 0; persist(); } return w; },
@@ -211,6 +267,8 @@
     addTransfer(tr) {
       const rec = { id: uid('t'), type: 'transfer', amount: Number(tr.amount),
         walletId: tr.fromWalletId, toWalletId: tr.toWalletId, date: tr.date || todayISO(), note: tr.note || '' };
+      if (tr.toAmount != null) rec.toAmount = Number(tr.toAmount);
+      if (tr.remit) { rec.remit = true; rec.categoryId = tr.categoryId || null; } // โอนรายได้ต่างประเทศเข้าไทย = นับภาษี
       data.transactions.push(rec); persist(); return rec;
     },
     updateTransaction(id, patch) { const t = data.transactions.find((x) => x.id === id); if (t) { Object.assign(t, patch); persist(); } return t; },
@@ -267,6 +325,22 @@
       persist();
     },
     deletePayment(debtId, pid) { const d = Store.debt(debtId); if (d) { d.payments = (d.payments || []).filter((p) => p.id !== pid); persist(); } },
+
+    // foreign income (USD pending)
+    foreignIncomes: () => (data.foreignIncome || []).slice().sort((a, b) => (a.date < b.date ? 1 : -1)),
+    foreignIncome: (id) => (data.foreignIncome || []).find((fi) => fi.id === id),
+    addForeignIncome(fi) {
+      const rec = { id: uid('fi'), date: fi.date || todayISO(), currency: fi.currency || 'USD', amount: Number(fi.amount) || 0, platform: fi.platform || '', note: fi.note || '', status: 'pending', convertedDate: null, fxRate: null, thbAmount: null };
+      data.foreignIncome.push(rec); persist(); return rec;
+    },
+    updateForeignIncome(id, patch) { const fi = Store.foreignIncome(id); if (fi) { Object.assign(fi, patch); persist(); } return fi; },
+    deleteForeignIncome(id) { data.foreignIncome = data.foreignIncome.filter((fi) => fi.id !== id); persist(); },
+    convertForeignIncome(id, { convertedDate, fxRate, thbAmount }) {
+      const fi = Store.foreignIncome(id); if (!fi) return;
+      Object.assign(fi, { status: 'converted', convertedDate, fxRate: Number(fxRate) || 0, thbAmount: Number(thbAmount) || 0 });
+      persist(); return fi;
+    },
+    taxSummary,
 
     // settings + backup
     settings: () => data.settings,

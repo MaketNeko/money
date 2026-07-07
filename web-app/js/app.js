@@ -25,15 +25,16 @@
 
   const ICON_CHOICES = ['i-food', 'i-car', 'i-bag', 'i-receipt', 'i-home', 'i-health', 'i-fun', 'i-edu',
     'i-save', 'i-wallet', 'i-bank', 'i-gift', 'i-brief', 'i-trend', 'i-grid', 'i-list', 'i-clock', 'i-cal', 'i-bell'];
+  const currSymbol = (c) => ({ THB: '฿', USD: '$', EUR: '€', GBP: '£', JPY: '¥' }[c] || c);
   const COLOR_CHOICES = ['#FB923C', '#2DD4BF', '#60A5FA', '#A78BFA', '#F472B6', '#F87171',
     '#FBBF24', '#38BDF8', '#34D399', '#22C55E', '#14B8A6', '#84CC16'];
 
   /* ---------- state ---------- */
   let current = 'home';
   const now = new Date();
-  const hist = { mode: 'month', y: now.getFullYear(), m: now.getMonth(), start: '', end: '' };
-  let add = null, bill = null, catEdit = null, debtE = null, wal = null, pay = null;
-  let catType = 'expense';
+  const hist = { mode: 'month', y: now.getFullYear(), m: now.getMonth(), start: '', end: '', search: '', typeFilter: 'all', walletId: '' };
+  let add = null, bill = null, catEdit = null, debtE = null, wal = null, pay = null, fxConvert = null;
+  let catType = 'expense', taxCatOpen = false, taxDedOpen = false;
   let deferredPrompt = null;
   const openFlags = {};
 
@@ -50,6 +51,7 @@
   function navItems() {
     const items = [{ k: 'home', ic: 'i-home', t: 'หน้าหลัก' }, { k: 'history', ic: 'i-cal', t: 'ประวัติ' }, { k: 'bills', ic: 'i-bell', t: 'บิล' }];
     if (mode() === 'advanced') items.push({ k: 'debt', ic: 'i-users', t: 'หนี้' });
+    if (S.settings().taxEnabled) items.push({ k: 'tax', ic: 'i-receipt', t: 'ภาษี' });
     items.push({ k: 'settings', ic: 'i-gear', t: 'ตั้งค่า' });
     return items;
   }
@@ -70,7 +72,7 @@
   }
 
   function setChrome(name) {
-    const titles = { home: '', history: 'ประวัติ', bills: 'บิลประจำ', debt: 'หนี้', wallets: 'จัดการกระเป๋า', categories: 'จัดการหมวดหมู่', settings: 'ตั้งค่า' };
+    const titles = { home: '', history: 'ประวัติ', bills: 'บิลประจำ', debt: 'หนี้', tax: 'ภาษี', wallets: 'จัดการกระเป๋า', categories: 'จัดการหมวดหมู่', settings: 'ตั้งค่า' };
     const left = $('#appbarLeft'), right = $('#appbarRight'), fab = $('#fab');
     let title = titles[name];
     if (name === 'home') title = monthLabel(now.getFullYear(), now.getMonth());
@@ -86,7 +88,7 @@
 
   function render(name) {
     ({ home: renderHome, history: renderHistory, bills: renderBills, debt: renderDebt,
-       wallets: renderWallets, categories: renderCategories, settings: renderSettings }[name] || (() => {}))();
+       tax: renderTax, wallets: renderWallets, categories: renderCategories, settings: renderSettings }[name] || (() => {}))();
   }
 
   /* =========================================================
@@ -107,10 +109,15 @@
   function txRow(t) {
     if (t.type === 'transfer') {
       const from = S.wallet(t.walletId), to = S.wallet(t.toWalletId);
+      const fromCur = (from && from.currency) || 'THB';
+      const toCur = (to && to.currency) || 'THB';
+      const amtLabel = t.toAmount != null
+        ? `${currSymbol(fromCur)}${fmt(t.amount)} → ${currSymbol(toCur)}${fmt(t.toAmount)}`
+        : `${currSymbol(fromCur)}${fmt(t.amount)}`;
       return `<div class="rowitem tap" onclick="App.openAdd('${t.id}')">
         <div class="avatar" style="color:var(--trust)">${icon('i-transfer')}</div>
-        <div class="body"><div class="t">โอนเงิน</div><div class="s">${esc(from ? from.name : '?')} → ${esc(to ? to.name : '?')} · ${dayLabel(t.date)}</div></div>
-        <div class="amt" style="color:var(--muted)"><span class="num">${fmt(t.amount)}</span></div></div>`;
+        <div class="body"><div class="t">${t.remit ? 'โอนเข้าไทย' : 'โอนเงิน'}</div><div class="s">${esc(from ? from.name : '?')} → ${esc(to ? to.name : '?')} · ${dayLabel(t.date)}</div></div>
+        <div class="amt" style="color:var(--muted)"><span class="num">${amtLabel}</span></div></div>`;
     }
     const c = S.category(t.categoryId);
     const w = S.wallet(t.walletId);
@@ -126,11 +133,17 @@
   function walletRow(w) {
     const bal = S.walletBalance(w.id);
     const def = w.id === S.defaultWalletId();
-    return `<div class="rowitem"><div class="avatar" style="color:${w.color}">${icon(w.icon)}</div>
-      <div class="body"><div class="t">${esc(w.name)}${def ? ' <span class="badge">เริ่มต้น</span>' : ''}</div></div>
-      <span class="wallet-bal num" style="color:${bal < 0 ? 'var(--expense)' : 'var(--ink)'}">฿${fmt(bal)}</span></div>`;
+    const cur = w.currency || 'THB';
+    const balStr = cur === 'THB' ? '฿' + fmt(bal) : currSymbol(cur) + fmt(bal) + ' ' + cur;
+    return `<div class="rowitem" style="${w.enabled === false ? 'opacity:.45' : ''}">
+      <div class="avatar" style="color:${w.color}">${icon(w.icon)}</div>
+      <div class="body"><div class="t">${esc(w.name)}${def ? ' <span class="badge">เริ่มต้น</span>' : ''}${cur !== 'THB' ? ` <span class="badge" style="background:var(--trust)">${cur}</span>` : ''}</div></div>
+      <span class="wallet-bal num" style="color:${bal < 0 ? 'var(--expense)' : 'var(--ink)'}"> ${balStr}</span></div>`;
   }
-  const walletChips = (sel, fn) => S.wallets().map((w) => `<span class="cchip ${w.id === sel ? 'on' : ''}" onclick="${fn}('${w.id}')">${esc(w.name)}</span>`).join('');
+  const walletChips = (sel, fn, thbOnly) => S.wallets().filter((w) => w.enabled !== false && ((w.currency || 'THB') === 'THB' || (!thbOnly && S.settings().foreignIncomeEnabled))).map((w) => {
+    const cur = w.currency || 'THB';
+    return `<span class="cchip ${w.id === sel ? 'on' : ''}" onclick="${fn}('${w.id}')">${esc(w.name)}${cur !== 'THB' ? ' ' + cur : ''}</span>`;
+  }).join('');
 
   /* =========================================================
      HOME
@@ -154,7 +167,19 @@
     }).join('');
 
     let walletsSection = '';
-    if (adv) walletsSection = `<div class="section"><span>กระเป๋าเงิน</span><button class="link" onclick="App.openTransfer()">${icon('i-transfer', 'sm')} โอนเงิน</button></div>${S.wallets().map(walletRow).join('')}`;
+    if (adv) {
+      const thbWallets = S.wallets().filter((w) => (w.currency || 'THB') === 'THB' && w.enabled !== false);
+      const fxWallets = S.settings().foreignIncomeEnabled ? S.wallets().filter((w) => (w.currency || 'THB') !== 'THB' && w.enabled !== false) : [];
+      walletsSection = `<div class="section"><span>กระเป๋าเงิน</span><button class="link" onclick="App.openTransfer()">${icon('i-transfer', 'sm')} โอนเงิน</button></div>${thbWallets.map(walletRow).join('')}`;
+      if (fxWallets.length) walletsSection += `<div class="section"><span>กระเป๋าต่างประเทศ</span><button class="link" onclick="App.go('wallets')">จัดการ →</button></div>${fxWallets.map((w) => {
+        const bal = S.walletBalance(w.id); const cur = w.currency;
+        return `<div class="rowitem tap" onclick="App.openFXConvert('${w.id}')">
+          <div class="avatar" style="color:${w.color}">${icon(w.icon)}</div>
+          <div class="body"><div class="t">${esc(w.name)} <span class="badge" style="background:var(--trust)">${cur}</span></div>
+          <div class="s">กดเพื่อ ฝาก/ถอน แปลงสกุล</div></div>
+          <span class="wallet-bal num" style="color:${bal < 0 ? 'var(--expense)' : 'var(--ink)'}"> ${currSymbol(cur)}${fmt(bal)} ${cur}</span></div>`;
+      }).join('')}`;
+    }
 
     let debtSection = '';
     if (adv) { const ds = S.debtSummary(); if (ds.iowe || ds.owed) debtSection = `<div class="section"><span>หนี้</span><button class="link" onclick="App.go('debt')">ดูทั้งหมด</button></div>
@@ -177,13 +202,42 @@
      HISTORY
      ========================================================= */
   function renderHistory() {
-    let list, label;
-    if (hist.mode === 'month') { const ym = ymKey(hist.y, hist.m); list = S.txInMonth(ym); label = monthLabel(hist.y, hist.m); }
+    let rawList, label;
+    if (hist.mode === 'month') { const ym = ymKey(hist.y, hist.m); rawList = S.txInMonth(ym); label = monthLabel(hist.y, hist.m); }
     else {
       if (!hist.start || !hist.end) { const d = S.todayISO(); hist.end = d; hist.start = d.slice(0, 8) + '01'; }
-      list = S.txInRange(hist.start, hist.end); label = `${dayLabel(hist.start)} – ${dayLabel(hist.end)}`;
+      rawList = S.txInRange(hist.start, hist.end); label = `${dayLabel(hist.start)} – ${dayLabel(hist.end)}`;
     }
-    const t = S.totals(list);
+
+    // apply filters
+    let list = rawList;
+    if (hist.typeFilter !== 'all') list = list.filter((tx) => tx.type === hist.typeFilter);
+    if (hist.walletId) list = list.filter((tx) => tx.walletId === hist.walletId || tx.toWalletId === hist.walletId);
+    if (hist.search) {
+      const q = hist.search.toLowerCase();
+      list = list.filter((tx) => {
+        const c = S.category(tx.categoryId);
+        return (tx.note || '').toLowerCase().includes(q) || (c && c.name.toLowerCase().includes(q));
+      });
+    }
+
+    // split by currency via wallet lookup
+    const txCur = (tx) => { const w = S.wallet(tx.walletId); return (w && w.currency) || 'THB'; };
+    const byCur = {};
+    for (const tx of list) { const c = txCur(tx); (byCur[c] = byCur[c] || []).push(tx); }
+    const currencies = Object.keys(byCur).sort((a, b) => (a === 'THB' ? -1 : 1));
+    const multiCur = currencies.length > 1;
+
+    const sumBlock = (cur, txs) => {
+      const t = S.totals(txs);
+      const sym = currSymbol(cur);
+      const fmtC = (n) => `${sym}${fmt(n)}`;
+      return `
+        ${multiCur ? `<div class="section" style="margin-top:12px"><span>${cur === 'THB' ? '฿ บาท' : `${sym} ${cur}`}</span></div>` : ''}
+        <div class="sum-grid"><div class="sum-card inc"><div class="k">รายรับ</div><div class="v num">${fmtC(t.income)}</div></div><div class="sum-card exp"><div class="k">รายจ่าย</div><div class="v num">${fmtC(t.expense)}</div></div></div>
+        <div class="sum-card" style="margin-top:10px"><div class="k">คงเหลือสุทธิ</div><div class="v num" style="color:${t.balance < 0 ? 'var(--expense)' : 'var(--ink)'}">${fmtC(t.balance)}</div></div>`;
+    };
+
     const atCurrent = hist.y === now.getFullYear() && hist.m === now.getMonth();
     const monthCtrl = `<div class="hist-nav"><button class="icon-btn" onclick="App.histMonth(-1)">${icon('i-left')}</button>
       <span class="lbl">${esc(label)}</span><button class="icon-btn" onclick="App.histMonth(1)" ${atCurrent ? 'disabled' : ''}>${icon('i-right')}</button></div>`;
@@ -192,12 +246,25 @@
       <div class="col"><div class="field-label" style="margin-top:0">ถึง</div><input class="input" type="date" id="rangeEnd" value="${hist.end}" max="${S.todayISO()}" onchange="App.histRange()"></div></div>
       <div class="wrap-chips" style="margin-top:10px"><span class="cchip" onclick="App.histPreset(7)">7 วัน</span><span class="cchip" onclick="App.histPreset(30)">30 วัน</span><span class="cchip" onclick="App.histPreset(90)">90 วัน</span><span class="cchip" onclick="App.histPreset('year')">ปีนี้</span></div>`;
 
+    const adv = mode() === 'advanced';
+    const wallets = adv ? S.wallets().filter((w) => w.enabled !== false) : [];
+    const walChips = wallets.length > 1 ? `<div class="wrap-chips" style="margin-top:8px">
+      <span class="cchip${!hist.walletId ? ' on' : ''}" onclick="App.histWallet('')">ทั้งหมด</span>
+      ${wallets.map((w) => `<span class="cchip${hist.walletId === w.id ? ' on' : ''}" onclick="App.histWallet('${w.id}')">${esc(w.name)}</span>`).join('')}
+    </div>` : '';
+
     $('#screen-history').innerHTML = `
       <div class="mode-tabs"><button class="${hist.mode === 'month' ? 'on' : ''}" onclick="App.histSetMode('month')">รายเดือน</button><button class="${hist.mode === 'range' ? 'on' : ''}" onclick="App.histSetMode('range')">เลือกช่วง</button></div>
       ${hist.mode === 'month' ? monthCtrl : rangeCtrl}
-      <div class="sum-grid"><div class="sum-card inc"><div class="k">รายรับ</div><div class="v num">${fmt(t.income)}</div></div><div class="sum-card exp"><div class="k">รายจ่าย</div><div class="v num">${fmt(t.expense)}</div></div></div>
-      <div class="sum-card" style="margin-top:10px"><div class="k">คงเหลือสุทธิ</div><div class="v num" style="color:${t.balance < 0 ? 'var(--expense)' : 'var(--ink)'}">${fmt(t.balance)}</div></div>
-      ${donutCard(list)}
+      ${currencies.length ? currencies.map((c) => sumBlock(c, byCur[c])).join('') : `<div class="sum-grid"><div class="sum-card inc"><div class="k">รายรับ</div><div class="v num">฿0</div></div><div class="sum-card exp"><div class="k">รายจ่าย</div><div class="v num">฿0</div></div></div>`}
+      ${donutCard(byCur['THB'] || [])}
+      <div style="margin-top:12px"><input class="input" placeholder="ค้นหา note หรือหมวดหมู่…" value="${esc(hist.search)}" oninput="App.histSearch(this.value)"></div>
+      <div class="wrap-chips" style="margin-top:8px">
+        <span class="cchip${hist.typeFilter === 'all' ? ' on' : ''}" onclick="App.histType('all')">ทั้งหมด</span>
+        <span class="cchip${hist.typeFilter === 'income' ? ' on' : ''}" onclick="App.histType('income')">รายรับ</span>
+        <span class="cchip${hist.typeFilter === 'expense' ? ' on' : ''}" onclick="App.histType('expense')">รายจ่าย</span>
+      </div>
+      ${walChips}
       <div class="section"><span>รายการ (${list.length})</span></div>
       ${txList(list.slice().sort((a, b) => (a.date < b.date ? 1 : -1)))}`;
   }
@@ -247,27 +314,129 @@
   }
 
   /* =========================================================
+     TAX
+     ========================================================= */
+
+  function renderTax() {
+    const st = S.settings(); const ts = S.taxSummary(); const ded = st.taxDeductions || {};
+    let html = '';
+
+    if (st.taxEnabled) {
+      const taxCls = ts.estimatedTax > 0 ? ' has-tax' : '';
+      const taxLbl = ts.estimatedTax > 0 ? '฿' + fmt(ts.estimatedTax) : ts.netIncome <= 0 ? 'ยังไม่ถึงเกณฑ์เสียภาษี' : '฿0';
+      const dedRows = [
+        ['ค่าใช้จ่าย 50% (สูงสุด ฿100,000)', ts.expenseDeduction],
+        ['ลดหย่อนส่วนตัว', ts.personalDeduction],
+        ded.socialSecurity ? ['ประกันสังคม', ded.socialSecurity] : null,
+        ded.lifeInsurance ? ['ประกันชีวิต/สุขภาพ', ded.lifeInsurance] : null,
+        ded.rmf ? ['RMF/SSF/กองทุน', ded.rmf] : null,
+        ded.parents ? ['ลดหย่อนบิดา/มารดา', ded.parents] : null,
+        ded.donation ? ['เงินบริจาค', ded.donation] : null,
+      ].filter(Boolean).map(([label, val]) => `<div class="tax-row"><span>${label}</span><span class="num">-฿${fmt(val)}</span></div>`).join('');
+
+      html += `
+        <div class="tax-hero${taxCls}">
+          <div class="tax-label">ภาษีประมาณการ ปี ${ts.year + 543}</div>
+          <div class="tax-amount num">${taxLbl}</div>
+          <div class="tax-net">เงินได้สุทธิ ฿${fmt(ts.netIncome)}</div>
+        </div>
+        <div class="section" style="margin-top:16px"><span>รายได้ที่ต้องเสียภาษี</span></div>
+        <div class="tax-rows">
+          <div class="tax-row"><span>รายได้ THB (หมวดที่ tag)</span><span class="num">฿${fmt(ts.taxableTHB)}</span></div>
+          ${ts.remitTHB > 0 ? `<div class="tax-row"><span>รายได้ต่างประเทศ (โอนเข้าไทย)</span><span class="num">฿${fmt(ts.remitTHB)}</span></div>` : ''}
+          <div class="tax-row total"><span>รายได้รวม</span><span class="num">฿${fmt(ts.totalIncome)}</span></div>
+        </div>
+        <div class="section" style="margin-top:16px"><span>หักค่าใช้จ่าย + ลดหย่อน</span></div>
+        <div class="tax-rows">
+          ${dedRows}
+          <div class="tax-row total"><span>หักรวม</span><span class="num">-฿${fmt(ts.totalDeductions)}</span></div>
+        </div>
+        <div class="section" style="margin-top:16px;cursor:pointer" onclick="App.toggleTaxCatSection()">
+          <span>หมวดหมู่รายรับ${taxCatOpen ? '' : ' ▸'}</span>
+          ${taxCatOpen ? `<button class="link" onclick="event.stopPropagation();App.go('categories')">จัดการ →</button>` : ''}
+        </div>
+        ${taxCatOpen ? S.categories('income').map((c) => `<div class="rowitem tap" style="padding:10px 4px" onclick="App.toggleCatTax('${c.id}')">
+          <div class="avatar" style="color:${c.color}">${icon(c.icon)}</div>
+          <div class="body"><div class="t">${esc(c.name)}</div></div>
+          <button class="sw-ui ${c.isTaxable ? 'on' : ''}" style="pointer-events:none"></button>
+        </div>`).join('') : ''}`;
+    }
+
+    html += `<div class="empty" style="text-align:left;padding:12px 4px;font-size:12px">* ตัวเลขนี้เป็นการประมาณการ — ยืนยันกับผู้เชี่ยวชาญด้านภาษีก่อนยื่น<br>* รายได้ต่างประเทศจะถูกนับเข้าภาษีเมื่อ "โอนเข้าไทย" (แปลงจากกระเป๋า USD → THB)</div>`;
+    $('#screen-tax').innerHTML = html;
+  }
+
+
+  /* =========================================================
+     FX CONVERT (foreign wallet → THB)
+     ========================================================= */
+  function openFXConvert(walletId, dir) {
+    if (!S.settings().foreignIncomeEnabled) return;
+    const w = S.wallet(walletId); if (!w || (w.currency || 'THB') === 'THB') return;
+    const bal = S.walletBalance(walletId);
+    fxConvert = { walletId, currency: w.currency, dir: dir === 'out' ? 'out' : 'in',
+      fromAmount: dir !== 'out' && bal > 0 ? String(Math.round(bal * 100) / 100) : '', toAmount: '', fxRate: '',
+      thbWalletId: S.defaultWalletId(), catId: (S.categories('income').find((c) => c.isTaxable) || S.categories('income')[0] || {}).id,
+      date: S.todayISO(), taxable: true };
+    renderFXConvert();
+  }
+  function renderFXConvert() {
+    const w = S.wallet(fxConvert.walletId); if (!w) return;
+    const cur = fxConvert.currency; const isIn = fxConvert.dir === 'in';
+    const bal = S.walletBalance(fxConvert.walletId);
+    const thbWallets = S.wallets().filter((x) => (x.currency || 'THB') === 'THB' && x.enabled !== false);
+    const catChips = S.categories('income').map((c) => `<span class="cchip ${fxConvert.catId === c.id ? 'on' : ''}" onclick="App.fxPick('catId','${c.id}')">${esc(c.name)}${c.isTaxable ? ' <span class="tax-badge">ภาษี</span>' : ''}</span>`).join('');
+    // ต้นทาง/ปลายทางตามทิศ: in = ต่างชาติ→THB (ถอน), out = THB→ต่างชาติ (ฝาก)
+    const fromLbl = isIn ? `จำนวน ${cur} ที่ถอน` : 'จำนวนเงินบาทที่ฝาก (THB)';
+    const toLbl = isIn ? 'ยอด THB ที่ได้รับจริง (หลังค่าธรรมเนียม)' : `ยอด ${cur} ที่เข้าจริง (หลังค่าธรรมเนียม)`;
+    const inner = `
+      <h1 style="font-size:18px;margin-bottom:6px">${isIn ? 'ถอนเป็นเงินไทย' : 'ฝากเข้า'} — ${esc(w.name)}</h1>
+      <div class="mode-tabs" style="margin-bottom:10px"><button class="${!isIn ? 'on' : ''}" onclick="App.fxSetDir('out')">ฝากเข้า (บาท→${cur})</button><button class="${isIn ? 'on' : ''}" onclick="App.fxSetDir('in')">ถอนออก (${cur}→บาท)</button></div>
+      <div style="background:var(--surface);border-radius:12px;padding:12px;margin-bottom:12px">
+        <div style="font-weight:600">ยอดคงเหลือ ${esc(w.name)}: ${currSymbol(cur)}${fmt(bal)} ${cur}</div>
+      </div>
+      <div class="field-label">กระเป๋าบาท (${isIn ? 'เข้า' : 'จ่ายจาก'})</div>
+      <div class="wrap-chips">${thbWallets.map((x) => `<span class="cchip ${fxConvert.thbWalletId === x.id ? 'on' : ''}" onclick="App.fxPick('thbWalletId','${x.id}')">${esc(x.name)}</span>`).join('')}</div>
+      <div class="field-label">${fromLbl}</div>
+      <input class="input num" id="fxFrom" inputmode="decimal" value="${fxConvert.fromAmount}" placeholder="0.00" oninput="App._fxSync('fromAmount',this.value)">
+      <div class="field-label">อัตราแลกเปลี่ยน (THB ต่อ 1 ${cur}) — อ้างอิง${isIn ? ' อัตรา BOT วันที่โอน' : ''}</div>
+      <input class="input num" id="fxRate" inputmode="decimal" value="${fxConvert.fxRate}" placeholder="เช่น 35.50" oninput="App._fxSync('fxRate',this.value)">
+      <div class="field-label">${toLbl}</div>
+      <input class="input num" id="fxTo" inputmode="decimal" value="${fxConvert.toAmount}" placeholder="0" oninput="App._fxSync('toAmount',this.value)">
+      <div class="field-label">วันที่</div>
+      <input class="input" type="date" id="fxDate" value="${fxConvert.date}" max="${S.todayISO()}" onchange="App._fxSync('date',this.value)">
+      ${isIn ? `<div class="switch-row" style="margin-top:12px"><div class="txt"><div class="t">นับเป็นรายได้ (เสียภาษี)</div><div class="s">ปิดถ้าเป็นเงินของคุณเองที่เคยฝากเข้าไป — เป็นแค่การโอนกลับ ไม่นับภาษี</div></div><button class="sw-ui ${fxConvert.taxable ? 'on' : ''}" onclick="App.fxToggleTaxable()"></button></div>
+      ${fxConvert.taxable ? `<div class="field-label">หมวดหมู่รายรับ</div><div class="wrap-chips">${catChips}</div>` : ''}` : ''}
+      <button class="btn-primary" onclick="App.saveFXConvert()">${!isIn ? 'บันทึกการฝากเข้า' : fxConvert.taxable ? 'บันทึก + นับเป็นรายได้' : 'บันทึกการโอนกลับ'}</button>`;
+    sheetWrap(inner, 'fxconvert');
+  }
+
+  /* =========================================================
      WALLETS (manage)
      ========================================================= */
   function renderWallets() {
     const ws = S.wallets(); const def = S.defaultWalletId();
     const rows = ws.map((w, i) => {
       const bal = S.walletBalance(w.id);
-      return `<div class="cat-row">
+      const cur = w.currency || 'THB';
+      const balStr = cur === 'THB' ? '฿' + fmt(bal) : currSymbol(cur) + fmt(bal) + ' ' + cur;
+      const isFX = cur !== 'THB';
+      return `<div class="cat-row" style="${w.enabled === false ? 'opacity:.5' : ''}">
         <span style="display:flex;flex-direction:column;gap:2px">
           <button class="act" onclick="App.moveWallet('${w.id}',-1)" ${i === 0 ? 'disabled' : ''}>${icon('i-up', 'sm')}</button>
           <button class="act" onclick="App.moveWallet('${w.id}',1)" ${i === ws.length - 1 ? 'disabled' : ''}>${icon('i-down', 'sm')}</button></span>
         <span class="avatar" style="width:34px;height:34px;color:${w.color}">${icon(w.icon, 'sm')}</span>
-        <span class="nm">${esc(w.name)}<div class="num" style="font-size:12px;color:${bal < 0 ? 'var(--expense)' : 'var(--muted)'}">฿${fmt(bal)}</div></span>
-        <button class="act" title="ตั้งเป็นกระเป๋าเริ่มต้น" onclick="App.setDefaultWallet('${w.id}')" style="color:${w.id === def ? 'var(--trust)' : 'var(--muted)'}">${icon('i-check', 'sm')}</button>
+        <span class="nm">${esc(w.name)}${isFX ? ` <span class="badge" style="background:var(--trust);font-size:10px">${cur}</span>` : ''}<div class="num" style="font-size:12px;color:${bal < 0 ? 'var(--expense)' : 'var(--muted)'}">${balStr}</div></span>
+        ${isFX ? `<button class="act" title="ฝาก/ถอน แปลงสกุล" onclick="App.openFXConvert('${w.id}')" style="color:var(--trust)">${icon('i-transfer', 'sm')}</button>` : `<button class="act" title="ตั้งเป็นกระเป๋าเริ่มต้น" onclick="App.setDefaultWallet('${w.id}')" style="color:${w.id === def ? 'var(--trust)' : 'var(--muted)'}">${icon('i-check', 'sm')}</button>`}
+        <button class="act" style="color:${w.enabled === false ? 'var(--muted)' : 'var(--ink)'}" onclick="App.walToggleEnabled('${w.id}')" title="${w.enabled === false ? 'เปิดใช้งาน' : 'ปิดซ่อน'}">${icon(w.enabled === false ? 'i-eye-off' : 'i-eye', 'sm')}</button>
         <button class="act" onclick="App.openWallet('${w.id}')">${icon('i-edit', 'sm')}</button>
         <button class="act del" onclick="App.delWallet('${w.id}')" ${ws.length <= 1 ? 'disabled' : ''}>${icon('i-trash', 'sm')}</button></div>`;
     }).join('');
     $('#screen-wallets').innerHTML = `
-      <div class="section" style="margin-top:14px"><span>รวมทุกกระเป๋า</span><span class="num" style="color:var(--ink);font-size:16px">฿${fmt(S.totalBalance())}</span></div>
+      <div class="section" style="margin-top:14px"><span>รวมกระเป๋า THB</span><span class="num" style="color:var(--ink);font-size:16px">฿${fmt(S.totalBalance())}</span></div>
       ${rows}
       <button class="add-btn" onclick="App.openWallet()">${icon('i-plus')} เพิ่มกระเป๋า</button>
-      <div class="empty" style="text-align:left;padding:14px 4px">เครื่องหมาย ✓ สีเขียว = กระเป๋าเริ่มต้น (ถูกเลือกอัตโนมัติตอนลงเงิน)</div>`;
+      <div class="empty" style="text-align:left;padding:14px 4px">✓ สีเขียว = กระเป๋าเริ่มต้น · ปุ่มตา = ซ่อน/แสดง · ↔ = แปลง FX</div>`;
   }
 
   /* =========================================================
@@ -280,7 +449,7 @@
         <button class="act" onclick="App.moveCat('${c.id}',-1)" ${i === 0 ? 'disabled' : ''}>${icon('i-up', 'sm')}</button>
         <button class="act" onclick="App.moveCat('${c.id}',1)" ${i === cats.length - 1 ? 'disabled' : ''}>${icon('i-down', 'sm')}</button></span>
       <span class="avatar" style="width:34px;height:34px;color:${c.color}">${icon(c.icon, 'sm')}</span>
-      <span class="nm">${esc(c.name)}</span>
+      <span class="nm">${esc(c.name)}${c.isTaxable && S.settings().taxEnabled ? '<span class="tax-badge">ภาษี</span>' : ''}</span>
       <button class="act" onclick="App.editCat('${c.id}')">${icon('i-edit', 'sm')}</button>
       <button class="act del" onclick="App.deleteCat('${c.id}')">${icon('i-trash', 'sm')}</button></div>`).join('');
     $('#screen-categories').innerHTML = `
@@ -295,7 +464,9 @@
   function renderSettings() {
     const st = S.settings(); const adv = mode() === 'advanced';
     const theme = localStorage.getItem(S.THEME_KEY) || 'system';
+    const palette = localStorage.getItem(S.PALETTE_KEY) || 'default';
     const tseg = (val, txt) => `<button class="seg seg-sm ${theme === val ? 'on-trust' : ''}" onclick="App.setTheme('${val}')">${txt}</button>`;
+    const pseg = (val, txt) => `<button class="seg seg-sm ${palette === val ? 'on-trust' : ''}" onclick="App.setPalette('${val}')">${txt}</button>`;
     const mseg = (val, txt) => `<button class="seg seg-sm ${st.mode === val ? 'on-trust' : ''}" onclick="App.setMode('${val}')">${txt}</button>`;
     $('#screen-settings').innerHTML = `
       <div class="set-head">โหมดการใช้งาน</div>
@@ -315,6 +486,32 @@
       <div class="set-head">หน้าตา</div>
       <div class="set-item"><span class="ic">${icon('i-moon')}</span><div class="body"><div class="t">ธีม</div><div class="s">สว่าง / มืด / ตามระบบ</div></div>
         <div class="toggle" style="padding:3px;gap:2px">${tseg('light', 'สว่าง')}${tseg('dark', 'มืด')}${tseg('system', 'ระบบ')}</div></div>
+      <div class="set-item"><span class="ic">${icon('i-save')}</span><div class="body"><div class="t">ชุดสี</div><div class="s">ค่าเริ่มต้น (เขียว) / ดวงดาว ✦ (กลางคืน)</div></div>
+        <div class="toggle" style="padding:3px;gap:2px">${pseg('default', 'ค่าเริ่มต้น')}${pseg('star', 'ดวงดาว')}</div></div>
+
+      <div class="divider"></div>
+      <div class="set-head">ภาษีเงินได้บุคคลธรรมดา (PIT)</div>
+      <div class="set-item"><span class="ic">${icon('i-receipt')}</span>
+        <div class="body"><div class="t">เปิดโหมดภาษี PIT</div><div class="s">คำนวณภาษีประมาณการ · ลดหย่อน · tag หมวดรายรับ</div></div>
+        <button class="sw-ui ${st.taxEnabled ? 'on' : ''}" onclick="App.setTaxEnabled()"></button></div>
+      <div class="set-item"><span class="ic">${icon('i-transfer')}</span>
+        <div class="body"><div class="t">ติดตามรายได้ต่างประเทศ</div><div class="s">บันทึก USD/EUR รอโอนเข้าไทย · แปลงเป็น THB · เพิ่มตอนลงเงิน</div></div>
+        <button class="sw-ui ${st.foreignIncomeEnabled ? 'on' : ''}" onclick="App.setForeignIncomeEnabled()"></button></div>
+      ${st.taxEnabled ? `
+      <div class="set-item"><span class="ic">${icon('i-cal')}</span>
+        <div class="body"><div class="t">ปีภาษี</div><div class="s">ปีที่คำนวณรายได้</div></div>
+        <select class="input" style="width:110px;padding:6px 8px" onchange="App.setTaxYear(Number(this.value))">
+          ${[-3, -2, -1, 0].map((offset) => { const y = now.getFullYear() + offset; return `<option value="${y}" ${(st.taxYear || now.getFullYear()) === y ? 'selected' : ''}>${y + 543}</option>`; }).join('')}
+        </select></div>
+      <div class="set-head" style="font-size:12px;padding-top:6px;cursor:pointer" onclick="App.toggleTaxDedSection()">ค่าลดหย่อนประจำปี${taxDedOpen ? ' ▾' : ' ▸ (กดดู)'}</div>
+      ${taxDedOpen ? [
+        ['ประกันสังคม', 'socialSecurity', 'ถูกหักจากเงินเดือน 5% สูงสุด ฿9,000/ปี — ดูจากสลิปเงินเดือน'],
+        ['ประกันชีวิต/สุขภาพ', 'lifeInsurance', 'เบี้ยประกันชีวิต + ประกันสุขภาพ — รวมกันสูงสุด ฿100,000/ปี'],
+        ['RMF / SSF / กองทุน', 'rmf', 'กองทุนรวม RMF, SSF, กองทุนสำรองเลี้ยงชีพ — ดูจากหนังสือรับรองกองทุน'],
+        ['ลดหย่อนบิดา/มารดา', 'parents', 'หักได้ 30,000 บ./คน (สูงสุด 2 คน = 60,000) — บิดา/มารดาอายุ 60+ และรายได้ไม่เกิน 30,000/ปี'],
+        ['เงินบริจาค', 'donation', 'บริจาคทั่วไปหักได้ 1 เท่า · บริจาคการศึกษา/กีฬา/โรงพยาบาลรัฐหักได้ 2 เท่า'],
+      ].map(([lbl, k, desc]) => `<div class="set-item" style="align-items:flex-start;padding:12px 0"><div class="body"><div class="t">${lbl}</div><div class="s" style="line-height:1.5">${desc}</div></div><input class="input num" style="width:100px;margin-top:2px;flex-shrink:0" inputmode="decimal" value="${(st.taxDeductions || {})[k] || ''}" placeholder="0" onchange="App.setTaxDed('${k}',this.value)"></div>`).join('') : ''}
+      ` : ''}
 
       <div class="divider"></div>
       <div class="set-head">สำรองข้อมูล</div>
@@ -341,17 +538,17 @@
   function openAdd(editId) {
     const t = editId ? S.transactions().find((x) => x.id === editId) : null;
     const defW = S.defaultWalletId();
-    const second = (S.wallets().find((w) => w.id !== defW) || {}).id || defW;
+    const second = (S.wallets().find((w) => w.id !== defW && (w.currency || 'THB') === 'THB') || {}).id || defW;
     add = t
-      ? { id: t.id, type: t.type, amount: String(t.amount), categoryId: t.categoryId || null, walletId: t.walletId || defW, toWalletId: t.toWalletId || second, date: t.date, note: t.note || '' }
-      : { id: null, type: 'expense', amount: '0', categoryId: null, walletId: defW, toWalletId: second, date: S.todayISO(), note: '' };
+      ? { id: t.id, type: t.type, amount: String(t.amount), toAmount: t.toAmount != null ? String(t.toAmount) : '', categoryId: t.categoryId || null, walletId: t.walletId || defW, toWalletId: t.toWalletId || second, date: t.date, note: t.note || '' }
+      : { id: null, type: 'expense', amount: '0', toAmount: '', categoryId: null, walletId: defW, toWalletId: second, date: S.todayISO(), note: '' };
     if (add.type !== 'transfer' && !add.categoryId) { const c = S.categories(add.type)[0]; add.categoryId = c && c.id; }
     renderAdd();
   }
   function openTransfer() {
     const defW = S.defaultWalletId();
-    const second = (S.wallets().find((w) => w.id !== defW) || {}).id || defW;
-    add = { id: null, type: 'transfer', amount: '0', categoryId: null, walletId: defW, toWalletId: second, date: S.todayISO(), note: '' };
+    const second = (S.wallets().find((w) => w.id !== defW && (w.currency || 'THB') === 'THB') || {}).id || defW;
+    add = { id: null, type: 'transfer', amount: '0', toAmount: '', categoryId: null, walletId: defW, toWalletId: second, date: S.todayISO(), note: '' };
     renderAdd();
   }
 
@@ -361,6 +558,9 @@
     const isT = add.type === 'transfer';
     const kindCls = add.type === 'income' ? 'inc' : add.type === 'expense' ? 'exp' : '';
     const valStyle = isT ? 'style="color:var(--trust)"' : '';
+    const selWallet = mode() === 'advanced' && !isT ? S.wallet(add.walletId) : null;
+    const addCurrency = (selWallet && selWallet.currency) || 'THB';
+    const addCurrSym = currSymbol(addCurrency);
 
     const seg = `<button class="seg ${add.type === 'expense' ? 'on-exp' : ''}" onclick="App.setKind('expense')">จ่าย</button>
       <button class="seg ${add.type === 'income' ? 'on-inc' : ''}" onclick="App.setKind('income')">รับ</button>
@@ -368,8 +568,9 @@
 
     let body;
     if (isT) {
-      body = `<div class="field-label" style="margin-top:4px">จาก</div><div class="wrap-chips">${walletChips(add.walletId, 'App.transFrom')}</div>
-        <div class="field-label">ไปยัง</div><div class="wrap-chips">${walletChips(add.toWalletId, 'App.transTo')}</div>`;
+      body = `<div class="field-label" style="margin-top:4px">จาก</div><div class="wrap-chips">${walletChips(add.walletId, 'App.transFrom', true)}</div>
+        <div class="field-label">ไปยัง</div><div class="wrap-chips">${walletChips(add.toWalletId, 'App.transTo', true)}</div>
+        ${S.settings().foreignIncomeEnabled ? `<div class="empty" style="text-align:left;padding:8px 2px;font-size:12px">* ฝาก/ถอน กระเป๋าต่างประเทศ (แปลงสกุล+ค่าธรรมเนียม) ทำที่หน้า "จัดการกระเป๋า" ปุ่ม ↔</div>` : ''}`;
     } else {
       const cats = S.categories(add.type);
       const chips = cats.map((c) => `<div class="chip ${c.id === add.categoryId ? 'sel' : ''}" onclick="App.pickCat('${c.id}')">${icon(c.icon)}<span class="nm">${esc(c.name)}</span></div>`).join('') +
@@ -385,7 +586,7 @@
         <div class="sheet">
           <div class="grab" onclick="App.closeSheet()"></div>
           <div class="toggle">${seg}</div>
-          <div class="amount-big"><span class="baht num">฿</span><span class="val num ${kindCls}" id="amtVal" ${valStyle}>${displayAmount(add.amount)}</span></div>
+          <div class="amount-big"><span class="baht num">${addCurrSym}</span><span class="val num ${kindCls}" id="amtVal" ${valStyle}>${displayAmount(add.amount)}</span>${addCurrency !== 'THB' ? `<span style="font-size:13px;color:var(--muted);margin-left:4px">${addCurrency}</span>` : ''}</div>
           ${body}
           <div class="range-row" style="margin-top:6px">
             <div class="col"><input class="input" type="date" value="${add.date}" max="${S.todayISO()}" onchange="App.setDate(this.value)"></div>
@@ -394,6 +595,7 @@
           <button class="save ${kindCls}" ${isT ? 'style="background:var(--trust)"' : ''} onclick="App.saveTx()">${add.id ? 'บันทึกการแก้ไข' : 'บันทึก'}</button>
           ${add.id ? `<button class="btn-ghost" onclick="App.deleteTx()">ลบรายการนี้</button>` : ''}
         </div></div>`;
+    initSheetSwipe();
   }
 
   function displayAmount(str) { const [i, d] = String(str).split('.'); const ip = Number(i || 0).toLocaleString('en-US'); return d != null ? `${ip}.${d}` : ip; }
@@ -431,7 +633,7 @@
      ========================================================= */
   function editCat(id) {
     const c = id ? S.category(id) : null;
-    catEdit = c ? { ...c } : { id: null, name: '', type: catType, icon: ICON_CHOICES[0], color: COLOR_CHOICES[0] };
+    catEdit = c ? { ...c } : { id: null, name: '', type: catType, icon: ICON_CHOICES[0], color: COLOR_CHOICES[0], isTaxable: false };
     catEdit._fromAdd = false; renderCatEdit();
   }
   function renderCatEdit() {
@@ -442,6 +644,7 @@
       <div class="field-label">ชื่อหมวด</div><input class="input" id="catName" value="${esc(catEdit.name)}" placeholder="เช่น กาแฟ">
       <div class="field-label">ไอคอน</div><div class="chips" style="flex-wrap:wrap">${icons}</div>
       <div class="field-label">สี</div><div class="wrap-chips" style="gap:10px">${colors}</div>
+      ${catEdit.type === 'income' && S.settings().taxEnabled ? `<div class="switch-row" style="margin-top:8px"><div class="txt"><div class="t">นับเป็นรายได้ภาษี</div><div class="s">รายได้จากหมวดนี้จะถูกนำไปคำนวณ PIT</div></div><button class="sw-ui ${catEdit.isTaxable ? 'on' : ''}" onclick="App.catTaxable()"></button></div>` : ''}
       <button class="btn-primary" onclick="App.saveCat(${fa})">บันทึก</button>`;
     sheetWrap(inner, 'cat');
   }
@@ -451,19 +654,22 @@
      ========================================================= */
   function openWallet(id) {
     const w = id ? S.wallet(id) : null;
-    wal = w ? { ...w } : { id: null, name: '', icon: 'i-wallet', color: '#34D399', openingBalance: 0 };
+    wal = w ? { ...w } : { id: null, name: '', icon: 'i-wallet', color: '#34D399', currency: 'THB', enabled: true, openingBalance: 0 };
     renderWalletEdit();
   }
   function walCapture() { const n = $('#walName'); if (n) wal.name = n.value; const o = $('#walOpen'); if (o) wal.openingBalance = o.value; }
   function renderWalletEdit() {
     const icons = ICON_CHOICES.map((ic) => `<button class="chip" style="width:52px;${ic === wal.icon ? 'border-color:var(--trust)' : ''}" onclick="App.walIcon('${ic}')">${icon(ic)}</button>`).join('');
     const colors = COLOR_CHOICES.map((col) => `<button onclick="App.walColor('${col}')" style="width:30px;height:30px;border-radius:50%;background:${col};border:3px solid ${col === wal.color ? 'var(--ink)' : 'transparent'};cursor:pointer"></button>`).join('');
+    const curChips = ['THB', 'USD'].map((c) => `<span class="cchip ${(wal.currency || 'THB') === c ? 'on' : ''}" onclick="App.walCurrency('${c}')">${c}</span>`).join('');
     const inner = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><h1 style="font-size:18px">${wal.id ? 'แก้ไขกระเป๋า' : 'เพิ่มกระเป๋า'}</h1>
         ${wal.id ? `<button class="icon-btn" style="color:var(--danger)" onclick="App.delWallet('${wal.id}')">${icon('i-trash')}</button>` : ''}</div>
-      <div class="field-label">ชื่อกระเป๋า</div><input class="input" id="walName" value="${esc(wal.name)}" placeholder="เช่น กสิกรไทย">
-      <div class="field-label">ยอดตั้งต้น (เงินที่มีอยู่ตอนนี้)</div><input class="input num" id="walOpen" inputmode="decimal" value="${wal.openingBalance || 0}">
+      <div class="field-label">ชื่อกระเป๋า</div><input class="input" id="walName" value="${esc(wal.name)}" placeholder="เช่น PayPal หรือ กสิกรไทย">
+      <div class="field-label">สกุลเงิน</div><div class="wrap-chips">${curChips}</div>
+      ${(wal.currency || 'THB') === 'THB' ? `<div class="field-label">ยอดตั้งต้น (เงินที่มีอยู่ตอนนี้)</div><input class="input num" id="walOpen" inputmode="decimal" value="${wal.openingBalance || 0}">` : `<div class="field-label" style="color:var(--muted);font-size:12px">กระเป๋าต่างประเทศ — ยอดเริ่มต้น 0 (ลงรายรับเพื่อเพิ่มยอด)</div>`}
       <div class="field-label">ไอคอน</div><div class="chips" style="flex-wrap:wrap">${icons}</div>
       <div class="field-label">สี</div><div class="wrap-chips" style="gap:10px">${colors}</div>
+      <div class="switch-row"><div class="txt"><div class="t">เปิดใช้งานกระเป๋านี้</div><div class="s">ปิด = ซ่อนจากฟอร์มและหน้าหลัก (ข้อมูลยังอยู่)</div></div><button class="sw-ui ${wal.enabled !== false ? 'on' : ''}" onclick="App.walToggleEdit()"></button></div>
       <button class="btn-primary" onclick="App.walSave()">บันทึก</button>`;
     sheetWrap(inner, 'wallet');
   }
@@ -498,10 +704,10 @@
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><h1 style="font-size:18px">${editing ? 'แก้ไขหนี้' : 'เพิ่มหนี้'}</h1>
         ${editing ? `<button class="icon-btn" style="color:var(--danger)" onclick="App.deleteDebt()">${icon('i-trash')}</button>` : ''}</div>
       <div class="toggle"><button class="seg ${d.kind === 'iowe' ? 'on-exp' : ''}" onclick="App.debtKind('iowe')">เรายืม (ต้องจ่าย)</button><button class="seg ${d.kind === 'owed' ? 'on-inc' : ''}" onclick="App.debtKind('owed')">ให้ยืม (รอรับคืน)</button></div>
-      <div class="field-label">${d.kind === 'iowe' ? 'เจ้าหนี้ (ยืมจากใคร)' : 'ลูกหนี้ (ใครยืมเรา)'}</div><input class="input" id="debtPerson" value="${esc(d.person)}" placeholder="ชื่อ">
-      <div class="field-label">จำนวนเงินรวม</div><input class="input num" id="debtPrincipal" inputmode="decimal" value="${d.principal || ''}" placeholder="0">
-      <div class="field-label">โน้ต (ไม่บังคับ)</div><input class="input" id="debtNote" value="${esc(d.note)}" placeholder="เช่น ยืมค่าเทอม">
-      <div class="field-label">วันที่</div><input class="input" type="date" id="debtDate" value="${d.date}" max="${S.todayISO()}">
+      <div class="field-label">${d.kind === 'iowe' ? 'เจ้าหนี้ (ยืมจากใคร)' : 'ลูกหนี้ (ใครยืมเรา)'}</div><input class="input" id="debtPerson" value="${esc(d.person)}" placeholder="ชื่อ" oninput="App._ds('person',this.value)">
+      <div class="field-label">จำนวนเงินรวม</div><input class="input num" id="debtPrincipal" inputmode="decimal" value="${d.principal || ''}" placeholder="0" oninput="App._ds('principal',this.value)">
+      <div class="field-label">โน้ต (ไม่บังคับ)</div><input class="input" id="debtNote" value="${esc(d.note)}" placeholder="เช่น ยืมค่าเทอม" oninput="App._ds('note',this.value)">
+      <div class="field-label">วันที่</div><input class="input" type="date" id="debtDate" value="${d.date}" max="${S.todayISO()}" onchange="App._ds('date',this.value)">
       ${!editing ? `<div class="switch-row"><div class="txt"><div class="t">เชื่อมกระเป๋าตอนนี้</div><div class="s">${startLabel}</div></div><button class="sw-ui ${d.startWalletId ? 'on' : ''}" onclick="App.debtLinkToggle()"></button></div>
         ${d.startWalletId ? `<div class="wrap-chips" style="margin-top:8px">${walletChips(d.startWalletId, 'App.debtStartWallet')}</div>` : ''}` : ''}
       ${paymentsHtml}
@@ -529,9 +735,43 @@
   }
 
   /* ---------- overlay + toast ---------- */
+  function initSheetSwipe() {
+    const sheet = $('#overlay .sheet');
+    if (!sheet) return;
+    let startY = 0, active = false;
+    sheet.addEventListener('touchstart', (e) => {
+      const grab = sheet.querySelector('.grab');
+      const fromGrab = grab && grab.contains(e.target);
+      if (!fromGrab && sheet.scrollTop > 0) return;
+      startY = e.touches[0].clientY;
+      active = true;
+      sheet.style.transition = 'none';
+    }, { passive: true });
+    sheet.addEventListener('touchmove', (e) => {
+      if (!active) return;
+      const dy = e.touches[0].clientY - startY;
+      if (dy > 0) { e.preventDefault(); sheet.style.transform = `translateY(${dy}px)`; }
+    }, { passive: false });
+    sheet.addEventListener('touchend', (e) => {
+      if (!active) return;
+      active = false;
+      const dy = e.changedTouches[0].clientY - startY;
+      if (dy > 80) {
+        sheet.style.transition = 'transform .2s ease';
+        sheet.style.transform = 'translateY(100%)';
+        setTimeout(App.closeSheet, 180);
+      } else {
+        sheet.style.transition = 'transform .2s ease';
+        sheet.style.transform = '';
+        setTimeout(() => { if (sheet.isConnected) sheet.style.transition = ''; }, 200);
+      }
+    }, { passive: true });
+  }
+
   function sheetWrap(inner, key) {
     const first = !openFlags[key]; openFlags[key] = true;
     $('#overlay').innerHTML = `<div class="sheet-dim${first ? ' anim' : ''}" onclick="if(event.target===this)App.closeSheet()"><div class="sheet"><div class="grab" onclick="App.closeSheet()"></div>${inner}</div></div>`;
+    initSheetSwipe();
   }
   function flashSaved() {
     const ab = $('#overlay .amount-big'); if (ab) { ab.classList.remove('saved'); void ab.offsetWidth; ab.classList.add('saved'); }
@@ -541,10 +781,18 @@
   let toastTimer;
   function toast(msg) { const el = $('#toast'); el.textContent = msg; el.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 1800); }
 
+  // สีของ status bar (meta theme-color) ต่อ [ชุดสี][โหมด]
+  const THEME_COLORS = {
+    default: { light: '#FBF6EE', dark: '#0E1613' },
+    star: { light: '#EAF2FB', dark: '#0B1730' },
+  };
   function applyTheme(pref) {
     let t = pref; if (pref === 'system' || !pref) t = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    const pal = localStorage.getItem(S.PALETTE_KEY) || 'default';
     document.documentElement.setAttribute('data-theme', t);
-    const meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.setAttribute('content', t === 'light' ? '#FBF6EE' : '#0E1613');
+    document.documentElement.setAttribute('data-palette', pal);
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', (THEME_COLORS[pal] || THEME_COLORS.default)[t]);
   }
 
   /* =========================================================
@@ -558,10 +806,11 @@
     setKind(k) { add.type = k; if (k !== 'transfer') { const c = S.categories(k).find((x) => x.id === add.categoryId) || S.categories(k)[0]; add.categoryId = c && c.id; } renderAdd(); },
     pickCat(id) { add.categoryId = id; renderAdd(); },
     pickWallet(id) { add.walletId = id; renderAdd(); },
-    transFrom(id) { add.walletId = id; if (add.toWalletId === id) add.toWalletId = (S.wallets().find((w) => w.id !== id) || {}).id; renderAdd(); },
-    transTo(id) { add.toWalletId = id; if (add.walletId === id) add.walletId = (S.wallets().find((w) => w.id !== id) || {}).id; renderAdd(); },
+    transFrom(id) { add.walletId = id; if (add.toWalletId === id) add.toWalletId = (S.wallets().find((w) => w.id !== id && (w.currency || 'THB') === 'THB') || {}).id; renderAdd(); },
+    transTo(id) { add.toWalletId = id; if (add.walletId === id) add.walletId = (S.wallets().find((w) => w.id !== id && (w.currency || 'THB') === 'THB') || {}).id; renderAdd(); },
     setDate(v) { add.date = v; },
     setNote(v) { add.note = v; },
+    setToAmount(v) { if (add) add.toAmount = v; },
     key(k) {
       let a = add.amount;
       if (k === 'bs') a = a.length > 1 ? a.slice(0, -1) : '0';
@@ -574,8 +823,12 @@
       if (!amt || amt <= 0) { toast('ใส่จำนวนเงินก่อน'); return; }
       if (add.type === 'transfer') {
         if (add.walletId === add.toWalletId) { toast('เลือกกระเป๋าต่างใบ'); return; }
-        if (add.id) S.updateTransaction(add.id, { type: 'transfer', amount: amt, walletId: add.walletId, toWalletId: add.toWalletId, date: add.date, note: add.note });
-        else S.addTransfer({ fromWalletId: add.walletId, toWalletId: add.toWalletId, amount: amt, date: add.date, note: add.note });
+        const fromW = S.wallet(add.walletId), toW = S.wallet(add.toWalletId);
+        const isCross = ((fromW && fromW.currency) || 'THB') !== ((toW && toW.currency) || 'THB');
+        const toAmt = isCross ? (parseFloat(add.toAmount) || 0) : null;
+        if (isCross && !toAmt) { toast('ใส่จำนวน ' + ((toW && toW.currency) || '') + ' ที่ได้รับด้วย'); return; }
+        if (add.id) S.updateTransaction(add.id, { type: 'transfer', amount: amt, toAmount: isCross ? toAmt : undefined, walletId: add.walletId, toWalletId: add.toWalletId, date: add.date, note: add.note });
+        else S.addTransfer({ fromWalletId: add.walletId, toWalletId: add.toWalletId, amount: amt, toAmount: isCross ? toAmt : null, date: add.date, note: add.note });
       } else {
         const payload = { type: add.type, amount: amt, categoryId: add.categoryId, walletId: add.walletId, date: add.date, note: add.note };
         if (add.id) S.updateTransaction(add.id, payload); else S.addTransaction(payload);
@@ -602,6 +855,8 @@
     },
     deleteBill() { if (confirm('ลบบิลนี้?')) { S.deleteBill(bill.id); closeSheet(); toast('ลบบิลแล้ว'); render('bills'); } },
 
+    catTaxable() { catEdit.isTaxable = !catEdit.isTaxable; renderCatEdit(); },
+
     // categories
     catType(t) { catType = t; renderCategories(); },
     moveCat(id, dir) { S.reorderCategory(id, dir); renderCategories(); },
@@ -616,22 +871,29 @@
     catPickColor(col) { catEdit.color = col; renderCatEdit(); },
     saveCat(fromAdd) {
       const name = $('#catName').value.trim(); if (!name) { toast('ใส่ชื่อหมวดก่อน'); return; }
-      if (catEdit.id) S.updateCategory(catEdit.id, { name, icon: catEdit.icon, color: catEdit.color });
-      else { const c = S.addCategory({ name, type: catEdit.type, icon: catEdit.icon, color: catEdit.color }); if (fromAdd && add) add.categoryId = c.id; }
+      if (catEdit.id) S.updateCategory(catEdit.id, { name, icon: catEdit.icon, color: catEdit.color, isTaxable: !!catEdit.isTaxable });
+      else { const c = S.addCategory({ name, type: catEdit.type, icon: catEdit.icon, color: catEdit.color, isTaxable: !!catEdit.isTaxable }); if (fromAdd && add) add.categoryId = c.id; }
       if (fromAdd && add) { openFlags.cat = false; renderAdd(); } else { closeSheet(); if (current === 'categories') renderCategories(); }
       toast('บันทึกหมวดแล้ว');
     },
 
     // wallets
     moveWallet(id, dir) { S.reorderWallet(id, dir); renderWallets(); },
-    setDefaultWallet(id) { S.setDefaultWallet(id); renderWallets(); toast('ตั้งเป็นกระเป๋าเริ่มต้นแล้ว'); },
+    setDefaultWallet(id) {
+      const w = S.wallet(id); if (!w || (w.currency || 'THB') !== 'THB') { toast('กระเป๋าเริ่มต้นต้องเป็น THB'); return; }
+      S.setDefaultWallet(id); renderWallets(); toast('ตั้งเป็นกระเป๋าเริ่มต้นแล้ว');
+    },
     walIcon(ic) { walCapture(); wal.icon = ic; renderWalletEdit(); },
     walColor(col) { walCapture(); wal.color = col; renderWalletEdit(); },
+    walCurrency(c) { walCapture(); wal.currency = c; renderWalletEdit(); },
+    walToggleEdit() { walCapture(); wal.enabled = wal.enabled === false ? true : false; renderWalletEdit(); },
+    walToggleEnabled(id) { const w = S.wallet(id); if (w) { S.updateWallet(id, { enabled: !w.enabled }); renderWallets(); } },
     walSave() {
-      const name = $('#walName').value.trim(); if (!name) { toast('ใส่ชื่อกระเป๋าก่อน'); return; }
-      const opening = parseFloat($('#walOpen').value) || 0;
-      if (wal.id) S.updateWallet(wal.id, { name, icon: wal.icon, color: wal.color, openingBalance: opening });
-      else S.addWallet({ name, icon: wal.icon, color: wal.color, openingBalance: opening });
+      const name = ($('#walName') || {}).value; if (!name || !name.trim()) { toast('ใส่ชื่อกระเป๋าก่อน'); return; }
+      const cur = wal.currency || 'THB';
+      const opening = cur === 'THB' ? (parseFloat(($('#walOpen') || {}).value) || 0) : 0;
+      const patch = { name: name.trim(), icon: wal.icon, color: wal.color, currency: cur, enabled: wal.enabled !== false, openingBalance: opening };
+      if (wal.id) S.updateWallet(wal.id, patch); else S.addWallet(patch);
       closeSheet(); toast('บันทึกกระเป๋าแล้ว'); renderWallets();
     },
     delWallet(id) {
@@ -640,7 +902,33 @@
       S.deleteWallet(id); closeSheet(); renderWallets();
     },
 
+    // FX convert
+    openFXConvert,
+    _fxSync(k, v) { if (fxConvert) fxConvert[k] = v; },
+    fxSetDir(dir) { if (fxConvert) { fxConvert.dir = dir === 'out' ? 'out' : 'in'; renderFXConvert(); } },
+    fxPick(k, v) { if (fxConvert) { fxConvert[k] = v; renderFXConvert(); } },
+    fxToggleTaxable() { if (fxConvert) { fxConvert.taxable = !fxConvert.taxable; renderFXConvert(); } },
+    saveFXConvert() {
+      const cur = fxConvert.currency; const isIn = fxConvert.dir === 'in';
+      const fromAmt = parseFloat($('#fxFrom').value) || 0; if (!fromAmt || fromAmt <= 0) { toast('ใส่จำนวน' + (isIn ? cur : 'บาท') + 'ที่' + (isIn ? 'ถอน' : 'ฝาก')); return; }
+      const toAmt = parseFloat($('#fxTo').value) || 0; if (!toAmt || toAmt <= 0) { toast('ใส่ยอดที่ได้รับจริง (หลังค่าธรรมเนียม)'); return; }
+      const rate = parseFloat($('#fxRate').value) || 0;
+      const w = S.wallet(fxConvert.walletId);
+      let tr;
+      if (isIn) {
+        // ถอน: ต่างชาติ → THB. remit เฉพาะตอนนับเป็นรายได้
+        tr = { fromWalletId: fxConvert.walletId, toWalletId: fxConvert.thbWalletId, amount: fromAmt, toAmount: toAmt, date: fxConvert.date, note: (w ? w.name : '') + ' ถอน ' + cur + ' ' + fromAmt + (rate ? ' @ ' + rate : '') };
+        if (fxConvert.taxable) { tr.remit = true; tr.categoryId = fxConvert.catId; }
+      } else {
+        // ฝาก: THB → ต่างชาติ (ไม่นับภาษี). toAmount = ยอดต่างชาติที่เข้าจริง
+        tr = { fromWalletId: fxConvert.thbWalletId, toWalletId: fxConvert.walletId, amount: fromAmt, toAmount: toAmt, date: fxConvert.date, note: 'ฝากเข้า ' + (w ? w.name : '') + ' ฿' + fromAmt + (rate ? ' @ ' + rate : '') };
+      }
+      S.addTransfer(tr);
+      fxConvert = null; closeSheet(); toast(!isIn ? 'ฝากเข้าแล้ว' : tr.remit ? 'ถอนเข้าไทยแล้ว (นับเป็นรายได้ภาษี)' : 'โอนกลับแล้ว (ไม่นับภาษี)'); render(current);
+    },
+
     // debt
+    _ds(k, v) { if (debtE) debtE[k] = v; },
     debtKind(k) { debtCapture(); debtE.kind = k; renderDebtEdit(); },
     debtLinkToggle() { debtCapture(); debtE.startWalletId = debtE.startWalletId ? null : S.defaultWalletId(); renderDebtEdit(); },
     debtStartWallet(id) { debtCapture(); debtE.startWalletId = id; renderDebtEdit(); },
@@ -669,16 +957,29 @@
     histMonth(dir) { let m = hist.m + dir, y = hist.y; if (m < 0) { m = 11; y--; } if (m > 11) { m = 0; y++; } if (y > now.getFullYear() || (y === now.getFullYear() && m > now.getMonth())) return; hist.m = m; hist.y = y; renderHistory(); },
     histRange() { hist.start = $('#rangeStart').value; hist.end = $('#rangeEnd').value; if (hist.start && hist.end && hist.start > hist.end) { const t = hist.start; hist.start = hist.end; hist.end = t; } renderHistory(); },
     histPreset(p) { const end = new Date(), start = new Date(); if (p === 'year') start.setMonth(0, 1); else start.setDate(end.getDate() - (p - 1)); const iso = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; hist.start = iso(start); hist.end = iso(end); renderHistory(); },
+    histSearch(v) { hist.search = v; renderHistory(); },
+    histType(v) { hist.typeFilter = v; renderHistory(); },
+    histWallet(v) { hist.walletId = v; renderHistory(); },
+
+    // tax
+    setTaxEnabled() { S.updateSettings({ taxEnabled: !S.settings().taxEnabled }); buildNav(); const st = S.settings(); if (!st.taxEnabled && !st.foreignIncomeEnabled && current === 'tax') go('home'); renderSettings(); },
+    setForeignIncomeEnabled() { S.updateSettings({ foreignIncomeEnabled: !S.settings().foreignIncomeEnabled }); buildNav(); const st = S.settings(); if (!st.taxEnabled && !st.foreignIncomeEnabled && current === 'tax') go('home'); if (current === 'tax') renderTax(); renderSettings(); },
+    setTaxYear(y) { S.updateSettings({ taxYear: y }); renderSettings(); if (current === 'tax') renderTax(); },
+    setTaxDed(k, v) { const d = { ...(S.settings().taxDeductions || {}) }; d[k] = parseFloat(v) || 0; S.updateSettings({ taxDeductions: d }); if (current === 'tax') renderTax(); },
+    toggleCatTax(id) { const c = S.category(id); if (!c || c.type !== 'income') return; S.updateCategory(id, { name: c.name, icon: c.icon, color: c.color, isTaxable: !c.isTaxable }); renderTax(); },
+    toggleTaxCatSection() { taxCatOpen = !taxCatOpen; renderTax(); },
+    toggleTaxDedSection() { taxDedOpen = !taxDedOpen; renderSettings(); },
 
     // settings
     setMode(v) { S.updateSettings({ mode: v }); buildNav(); if (v === 'simple' && (current === 'debt' || current === 'wallets')) { go('home'); } else { setChrome(current); renderSettings(); } toast('เปลี่ยนโหมดแล้ว'); },
     setReminderTime(v) { S.updateSettings({ reminderTime: v }); toast('บันทึกเวลาแล้ว'); },
     setTheme(v) { localStorage.setItem(S.THEME_KEY, v); applyTheme(v); renderSettings(); },
+    setPalette(v) { localStorage.setItem(S.PALETTE_KEY, v); applyTheme(localStorage.getItem(S.THEME_KEY) || 'system'); renderSettings(); },
     exportData() { const blob = new Blob([S.exportJSON()], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `ngern-backup-${S.todayISO()}.json`; a.click(); URL.revokeObjectURL(a.href); toast('ส่งออกแล้ว'); },
     importData() { $('#importFile').click(); },
     resetData() { if (confirm('ล้างข้อมูลทั้งหมด? รายการ/บิล/หนี้จะถูกลบ เริ่มต้นใหม่หน้าว่าง (หมวดหมู่+กระเป๋าเริ่มต้นยังอยู่)')) { S.resetAll(); toast('ล้างข้อมูลแล้ว'); buildNav(); go('home'); } },
 
-    closeSheet() { $('#overlay').innerHTML = ''; add = bill = catEdit = debtE = wal = pay = null; for (const k in openFlags) delete openFlags[k]; },
+    closeSheet() { $('#overlay').innerHTML = ''; add = bill = catEdit = debtE = wal = pay = fxConvert = null; for (const k in openFlags) delete openFlags[k]; },
     applyUpdate() { if (App._waiting) App._waiting.postMessage('skipWaiting'); $('#updateBanner').hidden = true; },
 
     // install (PWA)
