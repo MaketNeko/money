@@ -20,6 +20,9 @@
   /* ---------- บันทึกการอัปเดต (แสดงในตั้งค่า > เกี่ยวกับ) ----------
      ทุกครั้งที่อัปเดตแอป เพิ่มรายการใหม่ไว้บนสุด */
   const CHANGELOG = [
+    { v: '0.5', date: '11 ก.ค. 2569', items: [
+      'หน้าประวัติ: เพิ่มหัวข้อ “รายการหนี้” — หนี้ที่ผูกกระเป๋า (ยืม/ให้ยืม/จ่ายคืน/รับคืน) โผล่ในประวัติตามเดือน/ช่วงวัน กรองตามกระเป๋า+ค้นหาได้ กดเปิดหนี้นั้นได้',
+    ] },
     { v: '0.4', date: '7 ก.ค. 2569', items: [
       'เพิ่มปุ่ม “ตรวจหาอัปเดต” แบบแมนนวลในตั้งค่า > เกี่ยวกับ',
       'แก้บั๊ก: แปลง/ถอนเงินต่างประเทศเข้าไทย คำนวณยอดบาทให้อัตโนมัติจากเรต (เงินเข้ากระเป๋า+ประวัติถูกต้อง)',
@@ -53,7 +56,7 @@
   const now = new Date();
   const hist = { mode: 'month', y: now.getFullYear(), m: now.getMonth(), start: '', end: '', search: '', typeFilter: 'all', walletId: '' };
   let add = null, bill = null, catEdit = null, debtE = null, wal = null, pay = null, fxConvert = null;
-  let catType = 'expense', taxCatOpen = false, taxDedOpen = false;
+  let catType = 'expense', taxCatOpen = false, taxDedOpen = false, changelogOpen = false;
   let deferredPrompt = null;
   let swReg = null;
   const openFlags = {};
@@ -150,6 +153,36 @@
   }
   const txList = (list) => list.length ? list.map(txRow).join('') : `<div class="empty">ยังไม่มีรายการ</div>`;
 
+  /* ---------- debt movements (แถวเสมือน: หนี้ที่ผูกกระเป๋า → โชว์ในประวัติ) ----------
+     ไม่ใช่ transaction จริง (ยอดกระเป๋าคิดจาก debt โดยตรงอยู่แล้ว) แสดงผลอย่างเดียว ไม่นับรวมในสรุปรายรับ/จ่าย */
+  function debtMovements(inPeriod) {
+    const out = [];
+    for (const d of S.debts()) {
+      if (d.startWalletId && inPeriod(d.date)) {
+        out.push({ debtId: d.id, kind: d.kind, person: d.person, note: d.note, date: d.date, walletId: d.startWalletId, amount: d.principal, event: 'start' });
+      }
+      for (const p of d.payments || []) {
+        if (p.walletId && inPeriod(p.date)) {
+          out.push({ debtId: d.id, kind: d.kind, person: d.person, note: p.note, date: p.date, walletId: p.walletId, amount: p.amount, event: 'pay' });
+        }
+      }
+    }
+    return out;
+  }
+  const DEBT_MOVE_TITLE = { iowe_start: 'ยืมเงินเข้า', iowe_pay: 'จ่ายคืนหนี้', owed_start: 'ให้ยืม', owed_pay: 'รับเงินคืน' };
+  function debtMoveRow(mv) {
+    const w = S.wallet(mv.walletId);
+    const moneyIn = (mv.kind === 'iowe') === (mv.event === 'start'); // ยืมเข้า/รับคืน = เงินเข้า
+    const title = DEBT_MOVE_TITLE[mv.kind + '_' + mv.event] || 'หนี้';
+    const who = mv.kind === 'iowe' ? 'เจ้าหนี้ ' : 'ลูกหนี้ ';
+    const sub = `${who}${esc(mv.person || '-')} · ${dayLabel(mv.date)}${w ? ' · ' + esc(w.name) : ''}${mv.note ? ' · ' + esc(mv.note) : ''}`;
+    const col = moneyIn ? 'var(--income)' : 'var(--expense)';
+    return `<div class="rowitem tap" onclick="App.openDebt('${mv.debtId}')">
+      <div class="avatar" style="color:${col}">${icon('i-users')}</div>
+      <div class="body"><div class="t">${title}</div><div class="s">${sub}</div></div>
+      <div class="amt ${moneyIn ? 'inc' : 'exp'}">${icon(moneyIn ? 'i-up' : 'i-down', 'sm')}<span class="num">${fmt(mv.amount)}</span></div></div>`;
+  }
+
   function walletRow(w) {
     const bal = S.walletBalance(w.id);
     const def = w.id === S.defaultWalletId();
@@ -222,11 +255,12 @@
      HISTORY
      ========================================================= */
   function renderHistory() {
-    let rawList, label;
-    if (hist.mode === 'month') { const ym = ymKey(hist.y, hist.m); rawList = S.txInMonth(ym); label = monthLabel(hist.y, hist.m); }
+    let rawList, label, inPeriod;
+    if (hist.mode === 'month') { const ym = ymKey(hist.y, hist.m); rawList = S.txInMonth(ym); label = monthLabel(hist.y, hist.m); inPeriod = (d) => S.monthKey(d) === ym; }
     else {
       if (!hist.start || !hist.end) { const d = S.todayISO(); hist.end = d; hist.start = d.slice(0, 8) + '01'; }
       rawList = S.txInRange(hist.start, hist.end); label = `${dayLabel(hist.start)} – ${dayLabel(hist.end)}`;
+      inPeriod = (d) => d >= hist.start && d <= hist.end;
     }
 
     // apply filters
@@ -273,6 +307,15 @@
       ${wallets.map((w) => `<span class="cchip${hist.walletId === w.id ? ' on' : ''}" onclick="App.histWallet('${w.id}')">${esc(w.name)}</span>`).join('')}
     </div>` : '';
 
+    // รายการหนี้ที่ผูกกระเป๋าในช่วงนี้ (โหมดละเอียดเท่านั้น) — กรองด้วยกระเป๋า+ค้นหา เหมือนรายการปกติ
+    const q = hist.search ? hist.search.toLowerCase() : '';
+    const debtMoves = (adv ? debtMovements(inPeriod) : []).filter((mv) => {
+      if (hist.walletId && mv.walletId !== hist.walletId) return false;
+      if (q && !((mv.person || '').toLowerCase().includes(q) || (mv.note || '').toLowerCase().includes(q))) return false;
+      return true;
+    }).sort((a, b) => (a.date < b.date ? 1 : -1));
+    const debtSection = debtMoves.length ? `<div class="section"><span>รายการหนี้ (${debtMoves.length})</span><button class="link" onclick="App.go('debt')">จัดการ →</button></div>${debtMoves.map(debtMoveRow).join('')}` : '';
+
     $('#screen-history').innerHTML = `
       <div class="mode-tabs"><button class="${hist.mode === 'month' ? 'on' : ''}" onclick="App.histSetMode('month')">รายเดือน</button><button class="${hist.mode === 'range' ? 'on' : ''}" onclick="App.histSetMode('range')">เลือกช่วง</button></div>
       ${hist.mode === 'month' ? monthCtrl : rangeCtrl}
@@ -286,7 +329,8 @@
       </div>
       ${walChips}
       <div class="section"><span>รายการ (${list.length})</span></div>
-      ${txList(list.slice().sort((a, b) => (a.date < b.date ? 1 : -1)))}`;
+      ${txList(list.slice().sort((a, b) => (a.date < b.date ? 1 : -1)))}
+      ${debtSection}`;
   }
 
   /* =========================================================
@@ -550,11 +594,12 @@
       <div class="set-item"><div class="body"><div class="t">เงินของฉัน · เวอร์ชัน ${APP_VERSION}</div><div class="s">ข้อมูลเก็บในเครื่อง ไม่มี server · ใช้ออฟไลน์ได้</div></div></div>
       <button class="set-item" onclick="App.checkUpdate()"><span class="ic">${icon('i-transfer')}</span><div class="body"><div class="t">ตรวจหาอัปเดต</div><div class="s">เช็กเวอร์ชันใหม่แบบแมนนวล</div></div>${icon('i-chev', 'sm')}</button>
       <div class="set-head">มีอะไรใหม่</div>
-      ${CHANGELOG.map((c) => `
+      ${(changelogOpen ? CHANGELOG : CHANGELOG.slice(0, 1)).map((c) => `
         <div class="changelog">
           <div class="cl-head"><span class="cl-ver">v${c.v}</span><span class="cl-date">${c.date}</span></div>
           <ul class="cl-list">${c.items.map((it) => `<li>${esc(it)}</li>`).join('')}</ul>
         </div>`).join('')}
+      ${CHANGELOG.length > 1 ? `<button class="link" style="margin:6px 2px 2px" onclick="App.toggleChangelog()">${changelogOpen ? 'ซ่อนเวอร์ชันเก่า' : `ดูเวอร์ชันก่อนหน้า (${CHANGELOG.length - 1})`}</button>` : ''}
       <input type="file" id="importFile" accept="application/json,.json" hidden>`;
     $('#importFile').addEventListener('change', onImportFile);
   }
@@ -1010,6 +1055,7 @@
     toggleCatTax(id) { const c = S.category(id); if (!c || c.type !== 'income') return; S.updateCategory(id, { name: c.name, icon: c.icon, color: c.color, isTaxable: !c.isTaxable }); renderTax(); },
     toggleTaxCatSection() { taxCatOpen = !taxCatOpen; renderTax(); },
     toggleTaxDedSection() { taxDedOpen = !taxDedOpen; renderSettings(); },
+    toggleChangelog() { changelogOpen = !changelogOpen; renderSettings(); },
 
     // settings
     setMode(v) { S.updateSettings({ mode: v }); buildNav(); if (v === 'simple' && (current === 'debt' || current === 'wallets')) { go('home'); } else { setChrome(current); renderSettings(); } toast('เปลี่ยนโหมดแล้ว'); },
