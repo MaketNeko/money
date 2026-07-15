@@ -20,6 +20,9 @@
   /* ---------- บันทึกการอัปเดต (แสดงในตั้งค่า > เกี่ยวกับ) ----------
      ทุกครั้งที่อัปเดตแอป เพิ่มรายการใหม่ไว้บนสุด */
   const CHANGELOG = [
+    { v: '0.6', date: '15 ก.ค. 2569', items: [
+      'แก้บั๊ก: หน้าเพิ่ม/แก้บิล ชื่อบิลและจำนวนเงินที่พิมพ์ไว้หายเมื่อกดเลือกหมวดหมู่ (รวมถึงกดสวิตช์เปิดใช้งาน/แก้วันเตือน)',
+    ] },
     { v: '0.5', date: '11 ก.ค. 2569', items: [
       'หน้าประวัติ: เพิ่มหัวข้อ “รายการหนี้” — หนี้ที่ผูกกระเป๋า (ยืม/ให้ยืม/จ่ายคืน/รับคืน) โผล่ในประวัติตามเดือน/ช่วงวัน กรองตามกระเป๋า+ค้นหาได้ กดเปิดหนี้นั้นได้',
     ] },
@@ -699,6 +702,11 @@
       <button class="btn-primary" onclick="App.saveBill()">${bill.id ? 'บันทึกบิล' : 'เพิ่มบิล'}</button>`;
     sheetWrap(inner, 'bill');
   }
+  // เก็บค่าที่ผู้ใช้พิมไว้ (ชื่อ/จำนวนเงิน) กลับเข้า bill ก่อน re-render จะได้ไม่หาย
+  function syncBillInputs() {
+    const nm = $('#billName'); if (nm) bill.name = nm.value;
+    const am = $('#billAmount'); if (am) bill.amount = am.value;
+  }
 
   /* =========================================================
      CATEGORY EDIT
@@ -914,11 +922,11 @@
 
     // bill
     billVar() { bill.variable = !bill.variable; const f = $('#amtField'); if (f) f.hidden = bill.variable; const sw = $('#swVar'); if (sw) sw.classList.toggle('on', bill.variable); },
-    billCat(id) { bill.categoryId = id; renderBillEdit(); },
+    billCat(id) { syncBillInputs(); bill.categoryId = id; renderBillEdit(); },
     billDue(v) { bill.dueDay = Number(v); $('#dueLbl').textContent = v; },
-    billEnabled() { bill.enabled = !bill.enabled; renderBillEdit(); },
-    remDel(d) { bill.reminderDays = bill.reminderDays.filter((x) => x !== d); renderBillEdit(); },
-    remAdd() { const v = prompt('เตือนล่วงหน้ากี่วัน?', '7'); const n = parseInt(v, 10); if (n > 0 && !bill.reminderDays.includes(n)) { bill.reminderDays.push(n); renderBillEdit(); } },
+    billEnabled() { syncBillInputs(); bill.enabled = !bill.enabled; renderBillEdit(); },
+    remDel(d) { syncBillInputs(); bill.reminderDays = bill.reminderDays.filter((x) => x !== d); renderBillEdit(); },
+    remAdd() { const v = prompt('เตือนล่วงหน้ากี่วัน?', '7'); const n = parseInt(v, 10); if (n > 0 && !bill.reminderDays.includes(n)) { syncBillInputs(); bill.reminderDays.push(n); renderBillEdit(); } },
     saveBill() {
       const name = $('#billName').value.trim(); if (!name) { toast('ใส่ชื่อบิลก่อน'); return; }
       const amount = bill.variable ? null : parseFloat($('#billAmount') ? $('#billAmount').value : bill.amount) || 0;
