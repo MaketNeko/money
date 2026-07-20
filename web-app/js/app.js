@@ -20,6 +20,10 @@
   /* ---------- บันทึกการอัปเดต (แสดงในตั้งค่า > เกี่ยวกับ) ----------
      ทุกครั้งที่อัปเดตแอป เพิ่มรายการใหม่ไว้บนสุด */
   const CHANGELOG = [
+    { v: '0.7', date: '21 ก.ค. 2569', items: [
+      'หน้าหนี้: เพิ่มการ์ด “ยอดสุทธิ” (คนติดเรา − เราติดหนี้) และเปลี่ยนรายการเป็นสรุป “แยกตามคน” — คนที่มีหลายรายการกดกางดูหนี้ย่อยแต่ละก้อนได้',
+      'หน้าแรก: การ์ดหนี้โชว์ยอดสุทธิ กดเข้าไปดูรายละเอียดทั้งหมดได้',
+    ] },
     { v: '0.6', date: '15 ก.ค. 2569', items: [
       'แก้บั๊ก: หน้าเพิ่ม/แก้บิล ชื่อบิลและจำนวนเงินที่พิมพ์ไว้หายเมื่อกดเลือกหมวดหมู่ (รวมถึงกดสวิตช์เปิดใช้งาน/แก้วันเตือน)',
     ] },
@@ -60,6 +64,7 @@
   const hist = { mode: 'month', y: now.getFullYear(), m: now.getMonth(), start: '', end: '', search: '', typeFilter: 'all', walletId: '' };
   let add = null, bill = null, catEdit = null, debtE = null, wal = null, pay = null, fxConvert = null;
   let catType = 'expense', taxCatOpen = false, taxDedOpen = false, changelogOpen = false;
+  const debtOpen = new Set(); // index กลุ่มคนที่กางดูรายละเอียดอยู่ในหน้าหนี้
   let deferredPrompt = null;
   let swReg = null;
   const openFlags = {};
@@ -238,8 +243,17 @@
     }
 
     let debtSection = '';
-    if (adv) { const ds = S.debtSummary(); if (ds.iowe || ds.owed) debtSection = `<div class="section"><span>หนี้</span><button class="link" onclick="App.go('debt')">ดูทั้งหมด</button></div>
-      <div class="sum-grid"><div class="sum-card exp"><div class="k">เราติดหนี้</div><div class="v num">${fmt(ds.iowe)}</div></div><div class="sum-card inc"><div class="k">คนติดเรา</div><div class="v num">${fmt(ds.owed)}</div></div></div>`; }
+    if (adv) { const ds = S.debtSummary(); if (ds.iowe || ds.owed) {
+      const net = ds.net;
+      const netCol = net > 0 ? 'var(--income)' : net < 0 ? 'var(--expense)' : 'var(--muted)';
+      const netTxt = net > 0 ? 'คนติดเราสุทธิ' : net < 0 ? 'เราเป็นหนี้สุทธิ' : 'สมดุล';
+      debtSection = `<div class="section"><span>หนี้</span><button class="link" onclick="App.go('debt')">ดูทั้งหมด →</button></div>
+      <div class="card" style="margin-top:8px;cursor:pointer" onclick="App.go('debt')">
+        <div class="rowitem" style="padding:2px 0"><div class="body"><div class="s" style="color:var(--muted);font-size:12px">ยอดสุทธิ</div>
+        <div class="num" style="font-size:22px;font-weight:700;color:${netCol}">฿${fmt(Math.abs(net))}</div></div>
+        <span class="badge" style="background:${netCol};color:#fff;align-self:center">${netTxt}</span></div>
+        <div class="sum-grid" style="margin-top:10px"><div class="sum-card exp"><div class="k">เราติดหนี้</div><div class="v num">${fmt(ds.iowe)}</div></div><div class="sum-card inc"><div class="k">คนติดเรา</div><div class="v num">${fmt(ds.owed)}</div></div></div></div>`;
+    } }
 
     $('#screen-home').innerHTML = `
       <div class="hero-label">${adv ? 'เงินทั้งหมด' : 'คงเหลือเดือนนี้'}</div>
@@ -362,21 +376,46 @@
      ========================================================= */
   function renderDebt() {
     const ds = S.debtSummary(); const debts = S.debts();
-    const iowe = debts.filter((d) => d.kind === 'iowe'), owed = debts.filter((d) => d.kind === 'owed');
-    const rowsFor = (arr) => arr.map((d) => {
-      const rem = S.debtRemaining(d), paid = S.debtPaid(d);
-      const pct = d.principal ? Math.min(100, Math.round(paid / d.principal * 100)) : 0;
-      const done = rem <= 0; const col = d.kind === 'iowe' ? 'var(--expense)' : 'var(--income)';
-      return `<div class="card" style="margin-top:8px${done ? ';opacity:.6' : ''}" onclick="App.openDebt('${d.id}')"><div class="rowitem" style="padding:2px 0">
+    const groups = S.debtsByPerson();
+    const net = ds.net;
+    const netCol = net > 0 ? 'var(--income)' : net < 0 ? 'var(--expense)' : 'var(--muted)';
+    const netMsg = net > 0 ? 'โดยรวมคนติดเรามากกว่า' : net < 0 ? 'โดยรวมเราเป็นหนี้สุทธิ' : 'หนี้สองฝั่งสมดุลกัน';
+
+    // แถวหนี้ย่อย (โผล่ตอนกางกลุ่มที่มีหลายรายการ)
+    const childRow = (d, col) => {
+      const r = S.debtRemaining(d); const dn = r <= 0;
+      return `<div class="rowitem tap" style="padding:8px 4px;border-top:1px solid var(--divider)" onclick="event.stopPropagation();App.openDebt('${d.id}')">
+        <div class="body"><div class="t" style="font-size:14px">${dn ? '✓ ' : ''}${esc(d.note || d.date)}</div>
+        <div class="s">${dn ? 'ชำระครบแล้ว' : 'เหลือ ฿' + fmt(r) + ' / ฿' + fmt(d.principal)}</div></div>
+        <span class="num" style="color:${col};font-size:14px">฿${fmt(r)}</span></div>`;
+    };
+
+    const groupCard = (g, i) => {
+      const done = g.remaining <= 0;
+      const col = g.kind === 'iowe' ? 'var(--expense)' : 'var(--income)';
+      const kindLabel = g.kind === 'iowe' ? 'เราติดหนี้' : 'คนติดเรา';
+      const pct = g.principal ? Math.min(100, Math.round(g.paid / g.principal * 100)) : 0;
+      const multi = g.debts.length > 1;
+      const open = debtOpen.has(i);
+      const click = multi ? `App.toggleDebtGroup(${i})` : `App.openDebt('${g.debts[0].id}')`;
+      const children = (multi && open) ? g.debts.map((d) => childRow(d, col)).join('') : '';
+      const sub = multi
+        ? `${g.debts.length} รายการ · ${done ? 'ชำระครบแล้ว' : 'เหลือ ฿' + fmt(g.remaining)}`
+        : (done ? 'ชำระครบแล้ว' : 'เหลือ ฿' + fmt(g.remaining) + ' / ฿' + fmt(g.principal)) + (g.debts[0].note ? ' · ' + esc(g.debts[0].note) : '');
+      return `<div class="card" style="margin-top:8px${done ? ';opacity:.6' : ''}" onclick="${click}"><div class="rowitem" style="padding:2px 0">
         <div class="avatar" style="color:${col}">${icon('i-users')}</div>
-        <div class="body"><div class="t">${esc(d.person)}${done ? ' ✓' : ''}</div><div class="s">${done ? 'ชำระครบแล้ว' : 'เหลือ ฿' + fmt(rem) + ' / ฿' + fmt(d.principal)}${d.note ? ' · ' + esc(d.note) : ''}</div></div>
-        <span class="num" style="color:${col}">฿${fmt(rem)}</span></div>
-        <div class="progress"><span style="width:${pct}%"></span></div></div>`;
-    }).join('');
+        <div class="body"><div class="t">${esc(g.person)}${done ? ' ✓' : ''} <span class="badge" style="background:${col};color:#fff">${kindLabel}</span></div><div class="s">${sub}</div></div>
+        <span class="num" style="color:${col}">฿${fmt(g.remaining)}${multi ? ' ' + (open ? '▲' : '▼') : ''}</span></div>
+        <div class="progress"><span style="width:${pct}%"></span></div>${children}</div>`;
+    };
+
     $('#screen-debt').innerHTML = `
-      <div class="sum-grid" style="margin-top:14px"><div class="sum-card exp"><div class="k">เราติดหนี้ (ต้องจ่าย)</div><div class="v num">${fmt(ds.iowe)}</div></div><div class="sum-card inc"><div class="k">คนติดเรา (รอรับ)</div><div class="v num">${fmt(ds.owed)}</div></div></div>
-      ${iowe.length ? `<div class="section"><span>เรายืม (ต้องจ่าย)</span></div>${rowsFor(iowe)}` : ''}
-      ${owed.length ? `<div class="section"><span>ให้ยืม (รอรับคืน)</span></div>${rowsFor(owed)}` : ''}
+      ${debts.length ? `<div class="card" style="margin-top:14px;text-align:center">
+        <div class="hero-label" style="margin:0">ยอดสุทธิ</div>
+        <div class="hero-amount" style="justify-content:center"><span class="baht num">฿</span><span class="val num" style="font-size:40px;color:${netCol}">${fmt(Math.abs(net))}</span></div>
+        <div style="color:var(--muted);font-size:13px;margin-top:2px">${netMsg}</div></div>` : ''}
+      <div class="sum-grid"><div class="sum-card exp"><div class="k">เราติดหนี้ (ต้องจ่าย)</div><div class="v num">${fmt(ds.iowe)}</div></div><div class="sum-card inc"><div class="k">คนติดเรา (รอรับ)</div><div class="v num">${fmt(ds.owed)}</div></div></div>
+      ${groups.length ? `<div class="section"><span>แยกตามคน (${groups.length})</span></div>${groups.map(groupCard).join('')}` : ''}
       ${!debts.length ? '<div class="empty">ยังไม่มีรายการหนี้ กด "เพิ่มหนี้" ด้านล่าง</div>' : ''}`;
   }
 
@@ -1022,6 +1061,7 @@
     },
 
     // debt
+    toggleDebtGroup(i) { if (debtOpen.has(i)) debtOpen.delete(i); else debtOpen.add(i); render('debt'); },
     _ds(k, v) { if (debtE) debtE[k] = v; },
     debtKind(k) { debtCapture(); debtE.kind = k; renderDebtEdit(); },
     debtLinkToggle() { debtCapture(); debtE.startWalletId = debtE.startWalletId ? null : S.defaultWalletId(); renderDebtEdit(); },

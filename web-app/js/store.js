@@ -161,7 +161,21 @@
       const r = debtRemaining(d);
       if (d.kind === 'iowe') iowe += r; else owed += r;
     }
-    return { iowe, owed };
+    return { iowe, owed, net: owed - iowe };
+  }
+  // รวมหนี้ตามคน (แยกตามชื่อ + ประเภท iowe/owed) — สำหรับ dashboard "แยกตามคน"
+  function debtsByPerson() {
+    const map = new Map();
+    for (const d of data.debts) {
+      const key = (d.person || '(ไม่ระบุ)') + ' ' + d.kind;
+      let g = map.get(key);
+      if (!g) { g = { person: d.person || '(ไม่ระบุ)', kind: d.kind, principal: 0, paid: 0, remaining: 0, debts: [] }; map.set(key, g); }
+      g.principal += d.principal || 0;
+      g.paid += debtPaid(d);
+      g.remaining += debtRemaining(d);
+      g.debts.push(d);
+    }
+    return [...map.values()].sort((a, b) => b.remaining - a.remaining);
   }
 
   /* ---------- bills ---------- */
@@ -310,7 +324,7 @@
     // debts
     debts: () => data.debts.slice(),
     debt: (id) => data.debts.find((d) => d.id === id),
-    debtRemaining, debtPaid, debtSummary,
+    debtRemaining, debtPaid, debtSummary, debtsByPerson,
     addDebt(d) {
       const rec = { id: uid('d'), kind: d.kind || 'iowe', person: d.person || '', principal: Number(d.principal) || 0,
         note: d.note || '', date: d.date || todayISO(), startWalletId: d.startWalletId || null, payments: [] };
