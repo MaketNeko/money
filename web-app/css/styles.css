@@ -392,6 +392,9 @@ button { font-family:inherit; }
   .cols { display:grid; grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr); gap:0 28px; align-items:start; }
   .cols .col { display:block; min-width:0; }
 
+  /* แถวหมวดหมู่ → ขึ้นหลายแถวแทนการเลื่อนข้าง (เมาส์เลื่อนแนวนอนลำบาก) */
+  .chips { flex-wrap:wrap; }
+
   /* bottom sheet → ไดอะล็อกกลางจอ */
   .sheet-dim { justify-content:center; align-items:center; padding:32px; }
   .sheet { border-radius:24px; max-width:520px; max-height:88vh; padding-bottom:22px; }

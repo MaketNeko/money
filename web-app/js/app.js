@@ -20,6 +20,9 @@
   /* ---------- บันทึกการอัปเดต (แสดงในตั้งค่า > เกี่ยวกับ) ----------
      ทุกครั้งที่อัปเดตแอป เพิ่มรายการใหม่ไว้บนสุด */
   const CHANGELOG = [
+    { v: '0.10', date: '2 ส.ค. 2569', items: [
+      'แก้เลือกหมวดหมู่บน PC เลื่อนยาก: จอกว้างแสดงหมวดเป็นหลายแถวเห็นครบไม่ต้องเลื่อน ส่วนจอแคบใช้ล้อเมาส์เลื่อนแถบหมวดได้',
+    ] },
     { v: '0.9', date: '2 ส.ค. 2569', items: [
       'หน้าลงเงิน: พิมพ์จำนวนเงินจากคีย์บอร์ดจริงได้ (สำหรับ PC) — เลข 0-9/จุดทศนิยม ใช้ได้แม้แป้นอยู่ภาษาไทย, Backspace ลบ, Enter บันทึก, Esc ปิดหน้าต่าง (ปิดได้ทุกหน้าต่างชีต)',
     ] },
@@ -1185,6 +1188,14 @@
     else if (e.key === 'Backspace') { e.preventDefault(); App.key('bs'); }
     else if (e.key === 'Enter') { e.preventDefault(); App.saveTx(); }
   });
+
+  // ล้อเมาส์เลื่อนแถบแนวนอน (เช่น แถวหมวดหมู่ตอนจอแคบ) ได้โดยไม่ต้องกด Shift
+  document.addEventListener('wheel', (e) => {
+    const strip = e.target.closest && e.target.closest('.chips');
+    if (!strip || strip.scrollWidth <= strip.clientWidth) return; // ไม่มีอะไรให้เลื่อน (เช่น ตอน wrap แล้ว)
+    if (Math.abs(e.deltaX) >= Math.abs(e.deltaY)) return; // ทัชแพดปัดแนวนอนอยู่แล้ว
+    e.preventDefault(); strip.scrollLeft += e.deltaY;
+  }, { passive: false });
 
   applyTheme(localStorage.getItem(S.THEME_KEY) || 'system');
   matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => { if ((localStorage.getItem(S.THEME_KEY) || 'system') === 'system') applyTheme('system'); });
