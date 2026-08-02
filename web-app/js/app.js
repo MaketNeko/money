@@ -20,6 +20,10 @@
   /* ---------- บันทึกการอัปเดต (แสดงในตั้งค่า > เกี่ยวกับ) ----------
      ทุกครั้งที่อัปเดตแอป เพิ่มรายการใหม่ไว้บนสุด */
   const CHANGELOG = [
+    { v: '0.8', date: '2 ส.ค. 2569', items: [
+      'เพิ่มเลย์เอาต์จอกว้างสำหรับ PC/แท็บเล็ต (จอ ≥900px): เมนูย้ายเป็นแถบด้านซ้าย หน้าหลักจัด 2 คอลัมน์ หน้าต่างลงเงิน/แก้ไขเป็นไดอะล็อกกลางจอ — บนมือถือทุกอย่างเหมือนเดิม',
+      'แก้บั๊ก: ปุ่ม "ลงเงิน" ลอยค้างอยู่ในหน้าที่ไม่เกี่ยว (เช่น ตั้งค่า)',
+    ] },
     { v: '0.7', date: '21 ก.ค. 2569', items: [
       'หน้าหนี้: เพิ่มการ์ด “ยอดสุทธิ” (คนติดเรา − เราติดหนี้) และเปลี่ยนรายการเป็นสรุป “แยกตามคน” — คนที่มีหลายรายการกดกางดูหนี้ย่อยแต่ละก้อนได้',
       'หน้าแรก: การ์ดหนี้โชว์ยอดสุทธิ กดเข้าไปดูรายละเอียดทั้งหมดได้',
@@ -255,17 +259,20 @@
         <div class="sum-grid" style="margin-top:10px"><div class="sum-card exp"><div class="k">เราติดหนี้</div><div class="v num">${fmt(ds.iowe)}</div></div><div class="sum-card inc"><div class="k">คนติดเรา</div><div class="v num">${fmt(ds.owed)}</div></div></div></div>`;
     } }
 
-    $('#screen-home').innerHTML = `
+    // .cols/.col: มือถือ = display:contents (เหมือนไม่มีตัวห่อ), จอ ≥900px = แบ่ง 2 คอลัมน์
+    $('#screen-home').innerHTML = `<div class="cols"><div class="col">
       <div class="hero-label">${adv ? 'เงินทั้งหมด' : 'คงเหลือเดือนนี้'}</div>
       <div class="hero-amount"><span class="baht num">฿</span><span class="val num ${heroVal < 0 ? 'neg' : ''}">${fmt(heroVal)}</span></div>
       <div class="pills"><div class="pill inc">${icon('i-up', 'sm')} รับ <span class="num">${fmt(t.income)}</span></div>
         <div class="pill exp">${icon('i-down', 'sm')} จ่าย <span class="num">${fmt(t.expense)}</span></div></div>
       ${walletsSection}
       ${donutCard(list)}
+    </div><div class="col">
       ${up.length ? `<div class="section"><span>บิลใกล้ครบกำหนด</span><button class="link" onclick="App.go('bills')">ดูทั้งหมด</button></div>${upHtml}` : ''}
       ${debtSection}
       <div class="section"><span>รายการล่าสุด</span><button class="link" onclick="App.go('history')">ดูประวัติ</button></div>
-      ${txList(recent)}`;
+      ${txList(recent)}
+    </div></div>`;
   }
 
   /* =========================================================

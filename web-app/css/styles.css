@@ -352,3 +352,53 @@ button { font-family:inherit; }
 .tax-row:last-child { border-bottom:none; }
 .tax-row.total { font-weight:600; background:var(--surface-hi); }
 .tax-badge { font-size:11px; color:var(--trust); background:rgba(45,212,191,.15); padding:2px 7px; border-radius:10px; margin-left:6px; }
+
+/* ===========================================================
+   เลย์เอาต์จอกว้าง (PC / แท็บเล็ตแนวนอน ≥900px)
+   จอแคบกว่านี้ = เลย์เอาต์มือถือเดิมทุกอย่าง
+   =========================================================== */
+.fab[hidden] { display:none; }
+/* .cols/.col = ตัวห่อในหน้าหลัก — บนมือถือทำตัวเหมือนไม่มี (display:contents) */
+.cols, .cols .col { display:contents; }
+
+@media (min-width:900px) {
+  .app {
+    max-width:1160px;
+    display:grid; grid-template-columns:232px minmax(0,1fr);
+    grid-template-rows:auto minmax(0,1fr) auto;
+    grid-template-areas:"nav appbar" "nav screen" "fab screen";
+  }
+  .appbar { grid-area:appbar; position:static; padding:24px 32px 12px; }
+  .appbar h1 { font-size:20px; }
+  .screen { grid-area:screen; min-height:0; padding:0 32px 48px; }
+  .screen > * { max-width:760px; }
+  .screen > .cols { max-width:none; }
+
+  /* nav ล่าง → sidebar ซ้าย */
+  .nav {
+    grid-area:nav; position:static; height:auto;
+    flex-direction:column; align-items:stretch; gap:2px;
+    padding:20px 12px 8px; border-top:none; border-right:1px solid var(--divider);
+  }
+  .nav::before { content:"Neko Cash Manager"; font-size:15px; font-weight:700; color:var(--ink); padding:4px 12px 14px; }
+  .nav button { flex:0 0 auto; flex-direction:row; justify-content:flex-start; gap:12px; font-size:14px; padding:11px 12px; border-radius:12px; }
+  .nav button.on { background:rgba(45,212,191,.12); }
+  [data-palette="star"] .nav button.on { background:rgba(255,194,0,.14); }
+
+  /* fab → ปุ่มเต็มแถบซ้ายล่าง */
+  .fab { grid-area:fab; position:static; transform:none; margin:8px 16px 20px; justify-content:center; }
+
+  /* หน้าหลักแบ่ง 2 คอลัมน์ */
+  .cols { display:grid; grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr); gap:0 28px; align-items:start; }
+  .cols .col { display:block; min-width:0; }
+
+  /* bottom sheet → ไดอะล็อกกลางจอ */
+  .sheet-dim { justify-content:center; align-items:center; padding:32px; }
+  .sheet { border-radius:24px; max-width:520px; max-height:88vh; padding-bottom:22px; }
+  .sheet-dim.anim .sheet { animation:sheetPop .22s ease both; }
+  .grab { display:none; }
+
+  .toast { bottom:40px; }
+  .update-banner, .install-banner { left:auto; right:24px; bottom:24px; }
+}
+@keyframes sheetPop { from { opacity:0; transform:translateY(16px) scale(.98); } to { opacity:1; transform:none; } }
