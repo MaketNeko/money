@@ -20,6 +20,9 @@
   /* ---------- บันทึกการอัปเดต (แสดงในตั้งค่า > เกี่ยวกับ) ----------
      ทุกครั้งที่อัปเดตแอป เพิ่มรายการใหม่ไว้บนสุด */
   const CHANGELOG = [
+    { v: '0.9', date: '2 ส.ค. 2569', items: [
+      'หน้าลงเงิน: พิมพ์จำนวนเงินจากคีย์บอร์ดจริงได้ (สำหรับ PC) — เลข 0-9/จุดทศนิยม ใช้ได้แม้แป้นอยู่ภาษาไทย, Backspace ลบ, Enter บันทึก, Esc ปิดหน้าต่าง (ปิดได้ทุกหน้าต่างชีต)',
+    ] },
     { v: '0.8', date: '2 ส.ค. 2569', items: [
       'เพิ่มเลย์เอาต์จอกว้างสำหรับ PC/แท็บเล็ต (จอ ≥900px): เมนูย้ายเป็นแถบด้านซ้าย หน้าหลักจัด 2 คอลัมน์ หน้าต่างลงเงิน/แก้ไขเป็นไดอะล็อกกลางจอ — บนมือถือทุกอย่างเหมือนเดิม',
       'แก้บั๊ก: ปุ่ม "ลงเงิน" ลอยค้างอยู่ในหน้าที่ไม่เกี่ยว (เช่น ตั้งค่า)',
@@ -1167,6 +1170,22 @@
      ========================================================= */
   window.App = App;
   buildNav();
+
+  // คีย์บอร์ดจริง (PC): พิมพ์เลขในหน้าลงเงิน + Enter บันทึก, Esc ปิดชีตทุกหน้า
+  // ใช้ e.code กับปุ่มตัวเลข/จุด เพื่อให้ใช้ได้แม้แป้นอยู่โหมดภาษาไทย
+  document.addEventListener('keydown', (e) => {
+    if (!$('#overlay .sheet-dim')) return;
+    if (e.key === 'Escape') { App.closeSheet(); return; }
+    if (!$('#amtVal')) return; // เฉพาะชีตลงเงิน (มี keypad)
+    const el = document.activeElement;
+    if (el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return; // กำลังพิมพ์โน้ต/วันที่อยู่
+    const digit = /^(?:Digit|Numpad)(\d)$/.exec(e.code);
+    if (digit) { e.preventDefault(); App.key(digit[1]); }
+    else if (e.code === 'Period' || e.code === 'NumpadDecimal') { e.preventDefault(); App.key('.'); }
+    else if (e.key === 'Backspace') { e.preventDefault(); App.key('bs'); }
+    else if (e.key === 'Enter') { e.preventDefault(); App.saveTx(); }
+  });
+
   applyTheme(localStorage.getItem(S.THEME_KEY) || 'system');
   matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => { if ((localStorage.getItem(S.THEME_KEY) || 'system') === 'system') applyTheme('system'); });
   go('home');
