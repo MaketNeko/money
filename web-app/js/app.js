@@ -20,6 +20,10 @@
   /* ---------- บันทึกการอัปเดต (แสดงในตั้งค่า > เกี่ยวกับ) ----------
      ทุกครั้งที่อัปเดตแอป เพิ่มรายการใหม่ไว้บนสุด */
   const CHANGELOG = [
+    { v: '0.11', date: '3 ส.ค. 2569', items: [
+      'เพิ่มระบบแจ้งเตือนตอนเปิดแอป: เตือนบิลใกล้ครบกำหนด (ตามจำนวนวันเตือนล่วงหน้าของแต่ละบิล) และเตือนถ้ายังไม่ได้ลงรายจ่ายหลังเวลาที่ตั้งไว้ — เตือนเรื่องละครั้งต่อวัน',
+      'เพิ่มสวิตช์ "แจ้งเตือนระบบ" ในตั้งค่า: เปิดแล้วเด้งเป็นแจ้งเตือนของเครื่องด้วย ไม่เปิดก็ยังเตือนในแอป (iPhone/iPad ต้องติดตั้งแอปลงหน้าจอโฮมก่อน)',
+    ] },
     { v: '0.10', date: '2 ส.ค. 2569', items: [
       'แก้เลือกหมวดหมู่บน PC เลื่อนยาก: จอกว้างแสดงหมวดเป็นหลายแถวเห็นครบไม่ต้องเลื่อน ส่วนจอแคบใช้ล้อเมาส์เลื่อนแถบหมวดได้',
     ] },
@@ -582,6 +586,11 @@
      ========================================================= */
   function renderSettings() {
     const st = S.settings(); const adv = mode() === 'advanced';
+    const canNotify = 'Notification' in window;
+    const notifyOn = !!st.notifyEnabled && canNotify && Notification.permission === 'granted';
+    let notifyDesc = 'เด้งเตือนบิล/ลงรายจ่ายเป็นแจ้งเตือนของเครื่อง ตอนเปิดแอป';
+    if (!canNotify) notifyDesc = isIOS() && !isStandalone() ? 'iPhone/iPad ต้องติดตั้งแอปลงหน้าจอโฮมก่อน' : 'เบราว์เซอร์นี้ไม่รองรับ';
+    else if (Notification.permission === 'denied') notifyDesc = 'ถูกปิดกั้น — เปิดสิทธิ์แจ้งเตือนในตั้งค่าเบราว์เซอร์/ระบบก่อน';
     const theme = localStorage.getItem(S.THEME_KEY) || 'system';
     const palette = localStorage.getItem(S.PALETTE_KEY) || 'default';
     const tseg = (val, txt) => `<button class="seg seg-sm ${theme === val ? 'on-trust' : ''}" onclick="App.setTheme('${val}')">${txt}</button>`;
@@ -600,6 +609,8 @@
       <button class="set-item" onclick="App.go('categories')"><span class="ic">${icon('i-grid')}</span><div class="body"><div class="t">จัดการหมวดหมู่</div><div class="s">เพิ่ม/ลบ/แก้ชื่อ และจัดเรียง</div></div>${icon('i-chev', 'sm')}</button>
       <div class="set-item"><span class="ic">${icon('i-clock')}</span><div class="body"><div class="t">เวลาเตือนลงรายจ่าย</div><div class="s">แจ้งเตือนเมื่อเปิดแอปหลังเวลานี้</div></div>
         <input class="input num" type="time" style="width:110px" value="${st.reminderTime || '20:00'}" onchange="App.setReminderTime(this.value)"></div>
+      <div class="set-item"><span class="ic">${icon('i-bell')}</span><div class="body"><div class="t">แจ้งเตือนระบบ</div><div class="s">${notifyDesc}</div></div>
+        <button class="sw-ui ${notifyOn ? 'on' : ''}" onclick="App.setNotifyEnabled()"></button></div>
 
       <div class="divider"></div>
       <div class="set-head">หน้าตา</div>
@@ -914,6 +925,47 @@
   let toastTimer;
   function toast(msg) { const el = $('#toast'); el.textContent = msg; el.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 1800); }
 
+  /* =========================================================
+     REMINDERS — เช็คตอนเปิดแอป/กลับมาที่แท็บ เตือนเรื่องละครั้งต่อวัน
+     (บิลตาม reminderDays ของแต่ละบิล + ลงรายจ่ายหลัง reminderTime)
+     ========================================================= */
+  const NOTIFIED_KEY = 'ngern.notified';
+  function dueReminders() {
+    const msgs = [];
+    for (const b of S.billsWithStatus()) {
+      if (!b.enabled || b.paid) continue;
+      const maxRem = Math.max(0, ...(b.reminderDays || []));
+      if (b.daysLeft > maxRem) continue;
+      const when = b.daysLeft < 0 ? `เลยกำหนดมา ${-b.daysLeft} วัน` : b.daysLeft === 0 ? 'ครบกำหนดวันนี้' : `ครบกำหนดในอีก ${b.daysLeft} วัน`;
+      msgs.push({ key: 'bill:' + b.id, text: `บิล "${b.name}" ${when}` + (b.variable ? '' : ` (฿${fmt(b.amount)})`) });
+    }
+    const [hh, mm] = (S.settings().reminderTime || '20:00').split(':').map(Number);
+    const d = new Date();
+    const today = S.todayISO();
+    const loggedToday = S.transactions().some((t) => t.date === today && t.type === 'expense');
+    if ((d.getHours() > hh || (d.getHours() === hh && d.getMinutes() >= mm)) && !loggedToday)
+      msgs.push({ key: 'expense', text: 'วันนี้ยังไม่ได้ลงรายจ่ายเลย อย่าลืมบันทึกนะ' });
+    return msgs;
+  }
+  function showSysNotification(body) {
+    if (!S.settings().notifyEnabled || !('Notification' in window) || Notification.permission !== 'granted') return;
+    const opts = { body, icon: './icon.svg', tag: 'ngern-reminder' };
+    if (swReg) swReg.showNotification('เงินของฉัน', opts).catch(() => {});
+    else try { new Notification('เงินของฉัน', opts); } catch (e) {}
+  }
+  function checkReminders() {
+    const today = S.todayISO();
+    let seen = null;
+    try { seen = JSON.parse(localStorage.getItem(NOTIFIED_KEY)); } catch (e) {}
+    if (!seen || seen.date !== today) seen = { date: today, keys: [] };
+    const fresh = dueReminders().filter((m) => !seen.keys.includes(m.key));
+    if (!fresh.length) return;
+    seen.keys = seen.keys.concat(fresh.map((m) => m.key));
+    localStorage.setItem(NOTIFIED_KEY, JSON.stringify(seen));
+    showSysNotification(fresh.map((m) => m.text).join('\n'));
+    toast(fresh[0].text + (fresh.length > 1 ? ` · และอีก ${fresh.length - 1} เรื่อง` : ''));
+  }
+
   // สีของ status bar (meta theme-color) ต่อ [ชุดสี][โหมด]
   const THEME_COLORS = {
     default: { light: '#FBF6EE', dark: '#0E1613' },
@@ -1121,6 +1173,15 @@
     // settings
     setMode(v) { S.updateSettings({ mode: v }); buildNav(); if (v === 'simple' && (current === 'debt' || current === 'wallets')) { go('home'); } else { setChrome(current); renderSettings(); } toast('เปลี่ยนโหมดแล้ว'); },
     setReminderTime(v) { S.updateSettings({ reminderTime: v }); toast('บันทึกเวลาแล้ว'); },
+    async setNotifyEnabled() {
+      if (S.settings().notifyEnabled) { S.updateSettings({ notifyEnabled: false }); renderSettings(); toast('ปิดแจ้งเตือนระบบแล้ว'); return; }
+      if (!('Notification' in window)) { toast(isIOS() && !isStandalone() ? 'ต้องติดตั้งแอปลงหน้าจอโฮมก่อน ถึงเปิดแจ้งเตือนได้' : 'เบราว์เซอร์นี้ไม่รองรับการแจ้งเตือน'); return; }
+      const perm = await Notification.requestPermission();
+      if (perm !== 'granted') { renderSettings(); toast('ยังไม่ได้รับอนุญาต — เปิดสิทธิ์แจ้งเตือนในตั้งค่าเบราว์เซอร์'); return; }
+      S.updateSettings({ notifyEnabled: true }); renderSettings();
+      showSysNotification('เปิดการแจ้งเตือนแล้ว ✓ จะเตือนบิลใกล้ครบกำหนดและการลงรายจ่ายตอนเปิดแอป');
+      toast('เปิดแจ้งเตือนระบบแล้ว ✓');
+    },
     setTheme(v) { localStorage.setItem(S.THEME_KEY, v); applyTheme(v); renderSettings(); },
     setPalette(v) { localStorage.setItem(S.PALETTE_KEY, v); applyTheme(localStorage.getItem(S.THEME_KEY) || 'system'); renderSettings(); },
     exportData() { const blob = new Blob([S.exportJSON()], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `ngern-backup-${S.todayISO()}.json`; a.click(); URL.revokeObjectURL(a.href); toast('ส่งออกแล้ว'); },
@@ -1216,8 +1277,14 @@
           if (nw.state === 'installed' && navigator.serviceWorker.controller) { App._waiting = nw; $('#updateBanner').hidden = false; }
         });
       });
-    }).catch(() => {});
+      checkReminders();
+    }).catch(() => { checkReminders(); });
     let reloaded = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => { if (!reloaded) { reloaded = true; location.reload(); } });
+  } else {
+    checkReminders();
   }
+
+  // กลับมาที่แท็บ/เปิดแอปจากพื้นหลัง → เช็คเตือนอีกรอบ (เรื่องที่เตือนแล้ววันนี้จะไม่ซ้ำ)
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) checkReminders(); });
 })();
