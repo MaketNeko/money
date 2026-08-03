@@ -340,6 +340,21 @@
       persist();
     },
     deletePayment(debtId, pid) { const d = Store.debt(debtId); if (d) { d.payments = (d.payments || []).filter((p) => p.id !== pid); persist(); } },
+    // เคลียหลายก้อนรวดเดียว — ลงชำระเต็มยอดคงเหลือของแต่ละก้อน (ข้ามก้อนที่ครบแล้ว)
+    clearDebts(ids, opt) {
+      const o = opt || {}; const date = o.date || todayISO();
+      const walletId = o.walletId || data.settings.defaultWalletId;
+      let count = 0, iowe = 0, owed = 0;
+      for (const id of ids) {
+        const d = Store.debt(id); if (!d) continue;
+        const rem = debtRemaining(d); if (rem <= 0) continue;
+        d.payments = d.payments || [];
+        d.payments.push({ id: uid('p'), amount: rem, date, walletId, note: o.note || '' });
+        count++; if (d.kind === 'iowe') iowe += rem; else owed += rem;
+      }
+      if (count) persist();
+      return { count, iowe, owed };
+    },
 
     // foreign income (USD pending)
     foreignIncomes: () => (data.foreignIncome || []).slice().sort((a, b) => (a.date < b.date ? 1 : -1)),

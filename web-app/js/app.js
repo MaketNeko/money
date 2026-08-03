@@ -20,6 +20,10 @@
   /* ---------- บันทึกการอัปเดต (แสดงในตั้งค่า > เกี่ยวกับ) ----------
      ทุกครั้งที่อัปเดตแอป เพิ่มรายการใหม่ไว้บนสุด */
   const CHANGELOG = [
+    { v: '0.13', date: '3 ส.ค. 2569', items: [
+      'หน้าหนี้: เพิ่มโหมด "เลือกเคลีย" — ติ๊กเลือกหนี้หลายก้อน (ติ๊กทั้งคนทีเดียว หรือแยกทีละก้อนก็ได้) แล้วกดเคลียรวดเดียว ไม่ต้องเปิดทีละรายการ',
+      'ก่อนเคลียมีสรุปให้ดู: ยอดที่ต้องจ่ายออก / รับเข้า และผลรวมต่อกระเป๋า เลือกกระเป๋ากับวันที่ครั้งเดียวใช้กับทุกก้อน (ลงชำระเต็มยอดคงเหลือ)',
+    ] },
     { v: '0.12', date: '3 ส.ค. 2569', items: [
       'หน้าภาษี: เพิ่มแท็บ "แนะนำลดหย่อน" — คู่มือค่าลดหย่อนปีภาษี 2569 ครบทุกกลุ่ม (สิทธิ์ฟรี/ประกัน/กองทุน/บ้าน/บริจาค/มาตรการรัฐ) พร้อมเพดาน เงื่อนไข และทิปวางแผน',
       'ขยายช่องกรอกค่าลดหย่อนจาก 5 → 15 ช่อง (คู่สมรส บุตร ผู้พิการ ฝากครรภ์ ประกันสุขภาพพ่อแม่ ประกันบำนาญ Thai ESG ดอกเบี้ยบ้าน บริจาค ×2 มาตรการรัฐ ฯลฯ) — บริจาคการศึกษา/รพ.รัฐ กรอกยอดจริง แอปคูณ 2 ให้อัตโนมัติ',
@@ -101,9 +105,11 @@
   let current = 'home';
   const now = new Date();
   const hist = { mode: 'month', y: now.getFullYear(), m: now.getMonth(), start: '', end: '', search: '', typeFilter: 'all', walletId: '' };
-  let add = null, bill = null, catEdit = null, debtE = null, wal = null, pay = null, fxConvert = null;
+  let add = null, bill = null, catEdit = null, debtE = null, wal = null, pay = null, fxConvert = null, clearD = null;
   let catType = 'expense', taxCatOpen = false, taxDedOpen = false, changelogOpen = false, taxTab = 'summary';
   const debtOpen = new Set(); // index กลุ่มคนที่กางดูรายละเอียดอยู่ในหน้าหนี้
+  let debtSelMode = false;          // โหมดติ้กเลือกหลายก้อนในหน้าหนี้
+  const debtSel = new Set();        // id ก้อนหนี้ที่ติ้กไว้
   let deferredPrompt = null;
   let swReg = null;
   const openFlags = {};
@@ -132,6 +138,7 @@
 
   function go(name) {
     current = name;
+    if (name !== 'debt') exitDebtSelect();
     document.querySelectorAll('.screen').forEach((s) => (s.hidden = s.dataset.screen !== name));
     document.querySelectorAll('#nav button').forEach((b) => {
       const active = b.dataset.nav === name || (['categories', 'wallets'].includes(name) && b.dataset.nav === 'settings');
@@ -416,17 +423,29 @@
   /* =========================================================
      DEBT
      ========================================================= */
+  const debtUnpaid = (d) => S.debtRemaining(d) > 0;
+  function exitDebtSelect() { debtSelMode = false; debtSel.clear(); }
+  // ก้อนที่ติ้กไว้จริง ๆ (กรองก้อนที่ถูกลบ/ชำระครบไปแล้วออก)
+  function debtSelected() { return [...debtSel].map((id) => S.debt(id)).filter((d) => d && debtUnpaid(d)); }
+  const cbox = (state) => `<span class="cbox ${state}">${icon(state === 'part' ? 'i-minus' : 'i-check', 'sm')}</span>`;
+
   function renderDebt() {
     const ds = S.debtSummary(); const debts = S.debts();
     const groups = S.debtsByPerson();
     const net = ds.net;
     const netCol = net > 0 ? 'var(--income)' : net < 0 ? 'var(--expense)' : 'var(--muted)';
     const netMsg = net > 0 ? 'โดยรวมคนติดเรามากกว่า' : net < 0 ? 'โดยรวมเราเป็นหนี้สุทธิ' : 'หนี้สองฝั่งสมดุลกัน';
+    const openable = debts.filter(debtUnpaid);   // ก้อนที่ยังค้าง = ติ้กได้
+    if (!openable.length) exitDebtSelect();      // เคลียหมดแล้ว → ออกจากโหมดเลือกเอง
+    const sel = debtSelMode;
 
-    // แถวหนี้ย่อย (โผล่ตอนกางกลุ่มที่มีหลายรายการ)
+    // แถวหนี้ย่อย (โผล่ตอนกางกลุ่มที่มีหลายรายการ / ตอนอยู่ในโหมดเลือก)
     const childRow = (d, col) => {
       const r = S.debtRemaining(d); const dn = r <= 0;
-      return `<div class="rowitem tap" style="padding:8px 4px;border-top:1px solid var(--divider)" onclick="event.stopPropagation();App.openDebt('${d.id}')">
+      const on = debtSel.has(d.id);
+      const click = sel ? (dn ? '' : `App.debtSelToggle('${d.id}')`) : `App.openDebt('${d.id}')`;
+      return `<div class="rowitem ${click ? 'tap' : ''}" style="padding:8px 4px;border-top:1px solid var(--divider)${sel && dn ? ';opacity:.45' : ''}" onclick="event.stopPropagation();${click}">
+        ${sel ? (dn ? '<span class="cbox lock"></span>' : cbox(on ? 'on' : '')) : ''}
         <div class="body"><div class="t" style="font-size:14px">${dn ? '✓ ' : ''}${esc(d.note || d.date)}</div>
         <div class="s">${dn ? 'ชำระครบแล้ว' : 'เหลือ ฿' + fmt(r) + ' / ฿' + fmt(d.principal)}</div></div>
         <span class="num" style="color:${col};font-size:14px">฿${fmt(r)}</span></div>`;
@@ -439,26 +458,48 @@
       const pct = g.principal ? Math.min(100, Math.round(g.paid / g.principal * 100)) : 0;
       const multi = g.debts.length > 1;
       const open = debtOpen.has(i);
-      const click = multi ? `App.toggleDebtGroup(${i})` : `App.openDebt('${g.debts[0].id}')`;
-      const children = (multi && open) ? g.debts.map((d) => childRow(d, col)).join('') : '';
+      const unpaid = g.debts.filter(debtUnpaid);
+      const nOn = unpaid.filter((d) => debtSel.has(d.id)).length;
+      const gState = !nOn ? '' : (nOn === unpaid.length ? 'on' : 'part');
+      const ids = unpaid.map((d) => d.id).join(',');
+      // โหมดเลือก: กดการ์ด = ติ้ก/ปลดทั้งคน และกางก้อนย่อยไว้เสมอเพื่อติ้กแยกได้
+      const click = sel ? (done ? '' : `App.debtSelGroup('${ids}')`)
+        : (multi ? `App.toggleDebtGroup(${i})` : `App.openDebt('${g.debts[0].id}')`);
+      const children = (multi && (open || sel)) ? g.debts.map((d) => childRow(d, col)).join('') : '';
       const sub = multi
         ? `${g.debts.length} รายการ · ${done ? 'ชำระครบแล้ว' : 'เหลือ ฿' + fmt(g.remaining)}`
         : (done ? 'ชำระครบแล้ว' : 'เหลือ ฿' + fmt(g.remaining) + ' / ฿' + fmt(g.principal)) + (g.debts[0].note ? ' · ' + esc(g.debts[0].note) : '');
-      return `<div class="card" style="margin-top:8px${done ? ';opacity:.6' : ''}" onclick="${click}"><div class="rowitem" style="padding:2px 0">
-        <div class="avatar" style="color:${col}">${icon('i-users')}</div>
+      return `<div class="card ${click ? 'tap' : ''}" style="margin-top:8px${done ? ';opacity:.6' : ''}" onclick="${click}"><div class="rowitem" style="padding:2px 0">
+        ${sel ? (done ? '<span class="cbox lock"></span>' : cbox(gState)) : `<div class="avatar" style="color:${col}">${icon('i-users')}</div>`}
         <div class="body"><div class="t">${esc(g.person)}${done ? ' ✓' : ''} <span class="badge" style="background:${col};color:#fff">${kindLabel}</span></div><div class="s">${sub}</div></div>
-        <span class="num" style="color:${col}">฿${fmt(g.remaining)}${multi ? ' ' + (open ? '▲' : '▼') : ''}</span></div>
+        <span class="num" style="color:${col}">฿${fmt(g.remaining)}${multi && !sel ? ' ' + (open ? '▲' : '▼') : ''}</span></div>
         <div class="progress"><span style="width:${pct}%"></span></div>${children}</div>`;
     };
 
+    // แถบสรุปตอนติ๊ก (ลอยติดขอบล่างของหน้า)
+    const picked = debtSelected();
+    const pickedSum = picked.reduce((a, d) => a + S.debtRemaining(d), 0);
+    const selBar = sel ? `<div class="selbar">
+      <div class="txt">${picked.length ? `เลือก ${picked.length} ก้อน · <b class="num">฿${fmt(pickedSum)}</b>` : 'ติ๊กเลือกก้อนที่จะเคลีย'}</div>
+      <button class="btn-pay" ${picked.length ? '' : 'disabled'} onclick="App.openClearDebts()">เคลีย</button></div>` : '';
+
+    const allIds = openable.map((d) => d.id).join(',');
+    const allOn = openable.length && picked.length === openable.length;
+    const head = groups.length ? `<div class="section"><span>แยกตามคน (${groups.length})</span>
+      ${sel ? `<span><button class="link" onclick="App.debtSelAll('${allIds}',${allOn ? 'false' : 'true'})">${allOn ? 'ล้างที่เลือก' : 'เลือกทั้งหมด'}</button>
+        <button class="link" style="margin-left:12px;color:var(--muted)" onclick="App.debtSelectMode(false)">ยกเลิก</button></span>`
+        : (openable.length ? `<button class="link" onclick="App.debtSelectMode(true)">${icon('i-check', 'sm')} เลือกเคลีย</button>` : '')}</div>` : '';
+
+    $('#fab').hidden = sel;   // โหมดเลือก: ซ่อนปุ่มเพิ่มหนี้ ไม่ให้ทับแถบสรุป
     $('#screen-debt').innerHTML = `
       ${debts.length ? `<div class="card" style="margin-top:14px;text-align:center">
         <div class="hero-label" style="margin:0">ยอดสุทธิ</div>
         <div class="hero-amount" style="justify-content:center"><span class="baht num">฿</span><span class="val num" style="font-size:40px;color:${netCol}">${fmt(Math.abs(net))}</span></div>
         <div style="color:var(--muted);font-size:13px;margin-top:2px">${netMsg}</div></div>` : ''}
       <div class="sum-grid"><div class="sum-card exp"><div class="k">เราติดหนี้ (ต้องจ่าย)</div><div class="v num">${fmt(ds.iowe)}</div></div><div class="sum-card inc"><div class="k">คนติดเรา (รอรับ)</div><div class="v num">${fmt(ds.owed)}</div></div></div>
-      ${groups.length ? `<div class="section"><span>แยกตามคน (${groups.length})</span></div>${groups.map(groupCard).join('')}` : ''}
-      ${!debts.length ? '<div class="empty">ยังไม่มีรายการหนี้ กด "เพิ่มหนี้" ด้านล่าง</div>' : ''}`;
+      ${head}${groups.map(groupCard).join('')}
+      ${!debts.length ? '<div class="empty">ยังไม่มีรายการหนี้ กด "เพิ่มหนี้" ด้านล่าง</div>' : ''}
+      ${selBar}`;
   }
 
   /* =========================================================
@@ -938,6 +979,29 @@
     sheetWrap(inner, 'pay');
   }
 
+  /* ---------- เคลียหนี้หลายก้อนรวดเดียว ---------- */
+  function clearCapture() { const dt = $('#clearDate'); if (dt && clearD) clearD.date = dt.value; }
+  function renderClearDebts() {
+    const picked = debtSelected();
+    const sum = (k) => picked.filter((d) => d.kind === k).reduce((a, d) => a + S.debtRemaining(d), 0);
+    const iowe = sum('iowe'), owed = sum('owed');
+    const line = (label, amt, out) => `<div class="rowitem" style="padding:6px 0"><div class="body"><div class="t" style="font-size:14px">${label}</div></div>
+      <span class="num" style="color:${out ? 'var(--expense)' : 'var(--income)'}">${out ? '−' : '+'}฿${fmt(amt)}</span></div>`;
+    const names = [...new Set(picked.map((d) => d.person || '(ไม่ระบุ)'))];
+    const inner = `<h1 style="font-size:18px;margin-bottom:2px">เคลียหนี้ ${picked.length} ก้อน</h1>
+      <div class="s-mut" style="font-size:13px;margin-bottom:6px">${esc(names.slice(0, 3).join(', '))}${names.length > 3 ? ` และอีก ${names.length - 3} คน` : ''} · ลงชำระเต็มยอดคงเหลือของทุกก้อนที่เลือก</div>
+      <div class="card" style="margin-top:8px">
+        ${iowe ? line('เราติดหนี้ (จ่ายออก)', iowe, true) : ''}
+        ${owed ? line('คนติดเรา (รับเข้า)', owed, false) : ''}
+        <div class="rowitem" style="padding:8px 0 2px;border-top:1px solid var(--divider)"><div class="body"><div class="t">ผลต่อกระเป๋า</div></div>
+          <span class="num" style="color:${owed - iowe < 0 ? 'var(--expense)' : 'var(--income)'}">${owed - iowe < 0 ? '−' : '+'}฿${fmt(Math.abs(owed - iowe))}</span></div>
+      </div>
+      <div class="field-label">กระเป๋าที่ใช้</div><div class="wrap-chips">${walletChips(clearD.walletId, 'App.clearWallet')}</div>
+      <div class="field-label">วันที่</div><input class="input" type="date" id="clearDate" value="${clearD.date}" max="${S.todayISO()}">
+      <button class="btn-primary" onclick="App.clearDebtsSave()">เคลียทั้งหมด</button>`;
+    sheetWrap(inner, 'clearD');
+  }
+
   function renderIosInstall() {
     const inner = `<h1 style="font-size:18px;margin-bottom:2px">ติดตั้งลงหน้าจอโฮม</h1>
       <div class="s-mut" style="font-size:13px;margin-bottom:6px">บน iPhone / iPad — เปิดด้วย Safari แล้วทำตามนี้</div>
@@ -1221,6 +1285,35 @@
     },
     delPayment(debtId, pid) { if (confirm('ลบรายการชำระนี้?')) { S.deletePayment(debtId, pid); renderDebtEdit(); } },
 
+    // เคลียหนี้หลายก้อน (โหมดติ๊กเลือก)
+    debtSelectMode(on) { if (on) { debtSelMode = true; debtSel.clear(); } else exitDebtSelect(); renderDebt(); },
+    debtSelToggle(id) { if (debtSel.has(id)) debtSel.delete(id); else debtSel.add(id); renderDebt(); },
+    debtSelGroup(ids) {
+      const list = ids.split(',').filter(Boolean); if (!list.length) return;
+      const allOn = list.every((id) => debtSel.has(id));
+      list.forEach((id) => (allOn ? debtSel.delete(id) : debtSel.add(id)));
+      renderDebt();
+    },
+    debtSelAll(ids, on) {
+      debtSel.clear();
+      if (on) ids.split(',').filter(Boolean).forEach((id) => debtSel.add(id));
+      renderDebt();
+    },
+    openClearDebts() {
+      if (!debtSelected().length) { toast('ยังไม่ได้เลือกก้อนไหน'); return; }
+      clearD = { walletId: S.defaultWalletId(), date: S.todayISO() };
+      openFlags.clearD = false; renderClearDebts();
+    },
+    clearWallet(id) { clearCapture(); clearD.walletId = id; renderClearDebts(); },
+    clearDebtsSave() {
+      clearCapture();
+      const picked = debtSelected(); if (!picked.length) { closeSheet(); return; }
+      const r = S.clearDebts(picked.map((d) => d.id), { walletId: clearD.walletId, date: clearD.date });
+      clearD = null; exitDebtSelect(); closeSheet();
+      toast(`เคลียหนี้ ${r.count} ก้อนแล้ว ✓`);
+      render('debt');
+    },
+
     // history
     histSetMode(m) { hist.mode = m; renderHistory(); },
     histMonth(dir) { let m = hist.m + dir, y = hist.y; if (m < 0) { m = 11; y--; } if (m > 11) { m = 0; y++; } if (y > now.getFullYear() || (y === now.getFullYear() && m > now.getMonth())) return; hist.m = m; hist.y = y; renderHistory(); },
@@ -1260,7 +1353,7 @@
     importData() { $('#importFile').click(); },
     resetData() { if (confirm('ล้างข้อมูลทั้งหมด? รายการ/บิล/หนี้จะถูกลบ เริ่มต้นใหม่หน้าว่าง (หมวดหมู่+กระเป๋าเริ่มต้นยังอยู่)')) { S.resetAll(); toast('ล้างข้อมูลแล้ว'); buildNav(); go('home'); } },
 
-    closeSheet() { $('#overlay').innerHTML = ''; add = bill = catEdit = debtE = wal = pay = fxConvert = null; for (const k in openFlags) delete openFlags[k]; },
+    closeSheet() { $('#overlay').innerHTML = ''; add = bill = catEdit = debtE = wal = pay = fxConvert = clearD = null; for (const k in openFlags) delete openFlags[k]; },
     applyUpdate() { if (App._waiting) App._waiting.postMessage('skipWaiting'); $('#updateBanner').hidden = true; },
     async checkUpdate() {
       if (!('serviceWorker' in navigator) || !swReg) { toast('อุปกรณ์นี้ไม่รองรับตรวจอัปเดตอัตโนมัติ'); return; }
