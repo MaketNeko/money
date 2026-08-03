@@ -20,6 +20,10 @@
   /* ---------- บันทึกการอัปเดต (แสดงในตั้งค่า > เกี่ยวกับ) ----------
      ทุกครั้งที่อัปเดตแอป เพิ่มรายการใหม่ไว้บนสุด */
   const CHANGELOG = [
+    { v: '0.12', date: '3 ส.ค. 2569', items: [
+      'หน้าภาษี: เพิ่มแท็บ "แนะนำลดหย่อน" — คู่มือค่าลดหย่อนปีภาษี 2569 ครบทุกกลุ่ม (สิทธิ์ฟรี/ประกัน/กองทุน/บ้าน/บริจาค/มาตรการรัฐ) พร้อมเพดาน เงื่อนไข และทิปวางแผน',
+      'ขยายช่องกรอกค่าลดหย่อนจาก 5 → 15 ช่อง (คู่สมรส บุตร ผู้พิการ ฝากครรภ์ ประกันสุขภาพพ่อแม่ ประกันบำนาญ Thai ESG ดอกเบี้ยบ้าน บริจาค ×2 มาตรการรัฐ ฯลฯ) — บริจาคการศึกษา/รพ.รัฐ กรอกยอดจริง แอปคูณ 2 ให้อัตโนมัติ',
+    ] },
     { v: '0.11', date: '3 ส.ค. 2569', items: [
       'เพิ่มระบบแจ้งเตือนตอนเปิดแอป: เตือนบิลใกล้ครบกำหนด (ตามจำนวนวันเตือนล่วงหน้าของแต่ละบิล) และเตือนถ้ายังไม่ได้ลงรายจ่ายหลังเวลาที่ตั้งไว้ — เตือนเรื่องละครั้งต่อวัน',
       'เพิ่มสวิตช์ "แจ้งเตือนระบบ" ในตั้งค่า: เปิดแล้วเด้งเป็นแจ้งเตือนของเครื่องด้วย ไม่เปิดก็ยังเตือนในแอป (iPhone/iPad ต้องติดตั้งแอปลงหน้าจอโฮมก่อน)',
@@ -72,12 +76,33 @@
   const COLOR_CHOICES = ['#FB923C', '#2DD4BF', '#60A5FA', '#A78BFA', '#F472B6', '#F87171',
     '#FBBF24', '#38BDF8', '#34D399', '#22C55E', '#14B8A6', '#84CC16'];
 
+  /* ---------- ช่องค่าลดหย่อน (กฎปีภาษี 2569) — ใช้ทั้งตั้งค่าและหน้าภาษี ----------
+     [key ใน settings.taxDeductions, ป้ายชื่อ, คำอธิบาย/เงื่อนไข]
+     donationEdu = กรอกยอดจ่ายจริง แอปคูณ 2 ให้ตอนคำนวณ */
+  const DED_FIELDS = [
+    ['socialSecurity', 'ประกันสังคม', 'ตามที่ถูกหักจริง สูงสุด ฿10,500/ปี — ดูจากสลิปเงินเดือน'],
+    ['spouse', 'คู่สมรสไม่มีรายได้', '฿60,000 — จดทะเบียนสมรส และคู่สมรสไม่มีเงินได้'],
+    ['children', 'บุตร', '฿30,000/คน · คนที่ 2 ขึ้นไปที่เกิดตั้งแต่ปี 2561 ได้ ฿60,000/คน — กรอกยอดรวม'],
+    ['parents', 'ลดหย่อนบิดา/มารดา', '฿30,000/คน (สูงสุด 2 คน) — อายุ 60+ และรายได้ไม่เกิน ฿30,000/ปี'],
+    ['disabled', 'อุปการะผู้พิการ', '฿60,000/คน — ผู้พิการมีบัตรประจำตัวคนพิการ'],
+    ['maternity', 'ฝากครรภ์/คลอดบุตร', 'ตามจ่ายจริง สูงสุด ฿60,000 ต่อการตั้งครรภ์'],
+    ['lifeInsurance', 'ประกันชีวิต + สุขภาพ (ตัวเอง)', 'ชีวิต (กรมธรรม์ 10 ปีขึ้นไป) + สุขภาพ (ไม่เกิน ฿25,000) รวมกันสูงสุด ฿100,000'],
+    ['healthParents', 'ประกันสุขภาพบิดา/มารดา', 'ตามจ่ายจริง สูงสุด ฿15,000'],
+    ['pensionInsurance', 'ประกันชีวิตแบบบำนาญ', '15% ของเงินได้ สูงสุด ฿200,000 — นับรวมกลุ่มเกษียณไม่เกิน ฿500,000'],
+    ['rmf', 'RMF / กองทุนสำรองเลี้ยงชีพ / กบข.', 'RMF ไม่เกิน 30% ของเงินได้ — นับรวมกลุ่มเกษียณไม่เกิน ฿500,000'],
+    ['thaiEsg', 'Thai ESG', 'ไม่เกิน 30% ของเงินได้ สูงสุด ฿300,000 (วงเงินแยกจากกลุ่มเกษียณ) ถือครบ 5 ปี'],
+    ['homeLoan', 'ดอกเบี้ยกู้ซื้อ/สร้างที่อยู่อาศัย', 'ตามจ่ายจริง สูงสุด ฿100,000'],
+    ['donation', 'เงินบริจาคทั่วไป', 'ตามจ่ายจริง ไม่เกิน 10% ของเงินได้หลังหักลดหย่อน'],
+    ['donationEdu', 'บริจาคการศึกษา/กีฬา/รพ.รัฐ (×2)', 'นับ 2 เท่า — กรอกยอดที่จ่ายจริง แอปคูณ 2 ให้อัตโนมัติ (ควรบริจาคผ่าน e-Donation)'],
+    ['govMeasure', 'มาตรการรัฐรายปี', 'เช่น Easy E-Receipt — เพดานตามประกาศแต่ละปี กรอกยอดที่ใช้สิทธิ์ได้'],
+  ];
+
   /* ---------- state ---------- */
   let current = 'home';
   const now = new Date();
   const hist = { mode: 'month', y: now.getFullYear(), m: now.getMonth(), start: '', end: '', search: '', typeFilter: 'all', walletId: '' };
   let add = null, bill = null, catEdit = null, debtE = null, wal = null, pay = null, fxConvert = null;
-  let catType = 'expense', taxCatOpen = false, taxDedOpen = false, changelogOpen = false;
+  let catType = 'expense', taxCatOpen = false, taxDedOpen = false, changelogOpen = false, taxTab = 'summary';
   const debtOpen = new Set(); // index กลุ่มคนที่กางดูรายละเอียดอยู่ในหน้าหนี้
   let deferredPrompt = null;
   let swReg = null;
@@ -445,16 +470,18 @@
     let html = '';
 
     if (st.taxEnabled) {
+      html += `<div class="mode-tabs" style="margin-top:14px"><button class="${taxTab === 'summary' ? 'on' : ''}" onclick="App.setTaxTab('summary')">สรุปภาษี</button><button class="${taxTab === 'guide' ? 'on' : ''}" onclick="App.setTaxTab('guide')">แนะนำลดหย่อน</button></div>`;
+    }
+
+    if (st.taxEnabled && taxTab === 'guide') {
+      html += taxGuideHtml();
+    } else if (st.taxEnabled) {
       const taxCls = ts.estimatedTax > 0 ? ' has-tax' : '';
       const taxLbl = ts.estimatedTax > 0 ? '฿' + fmt(ts.estimatedTax) : ts.netIncome <= 0 ? 'ยังไม่ถึงเกณฑ์เสียภาษี' : '฿0';
       const dedRows = [
         ['ค่าใช้จ่าย 50% (สูงสุด ฿100,000)', ts.expenseDeduction],
         ['ลดหย่อนส่วนตัว', ts.personalDeduction],
-        ded.socialSecurity ? ['ประกันสังคม', ded.socialSecurity] : null,
-        ded.lifeInsurance ? ['ประกันชีวิต/สุขภาพ', ded.lifeInsurance] : null,
-        ded.rmf ? ['RMF/SSF/กองทุน', ded.rmf] : null,
-        ded.parents ? ['ลดหย่อนบิดา/มารดา', ded.parents] : null,
-        ded.donation ? ['เงินบริจาค', ded.donation] : null,
+        ...DED_FIELDS.map(([k, lbl]) => { const v = ded[k] || 0; return v ? [lbl, k === 'donationEdu' ? v * 2 : v] : null; }),
       ].filter(Boolean).map(([label, val]) => `<div class="tax-row"><span>${label}</span><span class="num">-฿${fmt(val)}</span></div>`).join('');
 
       html += `
@@ -487,6 +514,55 @@
 
     html += `<div class="empty" style="text-align:left;padding:12px 4px;font-size:12px">* ตัวเลขนี้เป็นการประมาณการ — ยืนยันกับผู้เชี่ยวชาญด้านภาษีก่อนยื่น<br>* รายได้ต่างประเทศจะถูกนับเข้าภาษีเมื่อ "โอนเข้าไทย" (แปลงจากกระเป๋า USD → THB)</div>`;
     $('#screen-tax').innerHTML = html;
+  }
+
+  // แท็บ "แนะนำลดหย่อน" — คู่มืออ้างอิงกฎปีภาษี 2569 (ยอดจริงกรอกใน ตั้งค่า > ค่าลดหย่อนประจำปี)
+  function taxGuideHtml() {
+    const gi = (t, cap, s) => `<div class="set-item" style="align-items:flex-start;padding:11px 0"><div class="body"><div class="t">${t}</div><div class="s" style="line-height:1.5">${s}</div></div><span class="num" style="flex-shrink:0;font-weight:600;margin-top:2px">${cap}</span></div>`;
+    return `
+      <div class="empty" style="text-align:left;padding:10px 4px 0;font-size:12px">อิงกฎปีภาษี 2569 — ใช้สิทธิ์แล้วอย่าลืมกรอกยอดจริงในช่องลดหย่อน เพื่อให้ภาษีประมาณการแม่นขึ้น</div>
+      <button class="add-btn" style="margin:10px 0 4px" onclick="App.openTaxDed()">${icon('i-edit')} กรอกยอดลดหย่อนที่ใช้สิทธิ์แล้ว</button>
+
+      <div class="set-head">1) สิทธิ์ที่ได้โดยไม่ต้องจ่ายเพิ่ม — เช็คให้ครบก่อน</div>
+      ${gi('ลดหย่อนส่วนตัว', '฿60,000', 'ทุกคนได้ — แอปหักให้อัตโนมัติแล้ว')}
+      ${gi('หักค่าใช้จ่าย 50%', '≤฿100,000', 'เงินเดือน/ฟรีแลนซ์ (40(1)/(2)) — แอปหักให้อัตโนมัติแล้ว')}
+      ${gi('ประกันสังคม', '≤฿10,500', 'ถูกหักจากเงินเดือนอยู่แล้ว — แค่กรอกยอดตามสลิป ห้ามลืม')}
+      ${gi('คู่สมรสไม่มีรายได้', '฿60,000', 'จดทะเบียนสมรส และคู่สมรสไม่มีเงินได้ทั้งปี')}
+      ${gi('บุตร', '฿30,000–60,000/คน', 'คนแรก 30,000 · คนที่ 2 ขึ้นไปที่เกิดตั้งแต่ปี 2561 ได้ 60,000')}
+      ${gi('บิดา/มารดา', '฿30,000/คน', 'อายุ 60+ รายได้ ≤30,000/ปี — พี่น้องใช้สิทธิ์คนเดียวกันซ้ำไม่ได้ ตกลงกันก่อน')}
+      ${gi('อุปการะผู้พิการ', '฿60,000/คน', 'ผู้พิการมีบัตรประจำตัวคนพิการ และเราเป็นผู้ดูแลตามบัตร')}
+      ${gi('ฝากครรภ์/คลอดบุตร', '≤฿60,000', 'ตามจ่ายจริงต่อการตั้งครรภ์ — เก็บใบเสร็จโรงพยาบาล')}
+
+      <div class="set-head">2) จ่ายเพิ่มเพื่อลดภาษี — ประกัน</div>
+      ${gi('ประกันชีวิต', '≤฿100,000', 'กรมธรรม์คุ้มครอง 10 ปีขึ้นไป')}
+      ${gi('ประกันสุขภาพ (ตัวเอง)', '≤฿25,000', 'รวมกับประกันชีวิตแล้วต้องไม่เกิน ฿100,000')}
+      ${gi('ประกันสุขภาพพ่อแม่', '≤฿15,000', 'ตามจ่ายจริง — วงเงินแยกจากของตัวเอง')}
+      ${gi('ประกันบำนาญ', '≤฿200,000', '15% ของเงินได้ — นับรวม "กลุ่มเกษียณ" ไม่เกิน ฿500,000')}
+
+      <div class="set-head">3) จ่ายเพิ่มเพื่อลดภาษี — กองทุน</div>
+      ${gi('RMF', '≤฿500,000', '30% ของเงินได้ — ถือถึงอายุ 55 และ ≥5 ปี ต้องซื้อต่อเนื่อง (เว้นได้ไม่เกิน 1 ปี)')}
+      ${gi('Thai ESG', '≤฿300,000', '30% ของเงินได้ — วงเงินแยกจากกลุ่มเกษียณ ถือครบ 5 ปี')}
+      ${gi('SSF', 'ปิดรับซื้อใหม่', 'ซื้อลดหย่อนได้ถึงปี 2567 เท่านั้น — ของเดิมถือต่อจนครบ 10 ปี')}
+      <div class="empty" style="text-align:left;padding:6px 4px;font-size:12px">⚠️ เพดานรวม "กลุ่มเกษียณ" (RMF + ประกันบำนาญ + กองทุนสำรองเลี้ยงชีพ + กบข.) = ฿500,000/ปี</div>
+
+      <div class="set-head">4) ที่อยู่อาศัย</div>
+      ${gi('ดอกเบี้ยกู้ซื้อ/สร้างบ้าน', '≤฿100,000', 'ตามจ่ายจริง — ขอหนังสือรับรองดอกเบี้ยจากธนาคาร')}
+
+      <div class="set-head">5) เงินบริจาค</div>
+      ${gi('บริจาคทั่วไป', '≤10%', 'ของเงินได้หลังหักค่าใช้จ่าย+ลดหย่อน — วัด มูลนิธิ องค์กรสาธารณกุศล')}
+      ${gi('การศึกษา/กีฬา/รพ.รัฐ', '×2 เท่า', 'นับ 2 เท่าของที่จ่ายจริง (เพดาน 10% เช่นกัน) — บริจาคผ่าน e-Donation ไม่ต้องเก็บใบเสร็จ')}
+      ${gi('พรรคการเมือง', '≤฿10,000', 'ตามจ่ายจริง')}
+
+      <div class="set-head">6) มาตรการรัฐรายปี</div>
+      ${gi('Easy E-Receipt ฯลฯ', 'ตามประกาศ', 'ออกใหม่เป็นปี ๆ (เช่น ปี 2568: ซื้อสินค้า ≤฿50,000 ช่วง 16 ม.ค.–28 ก.พ. แบบ e-Tax Invoice) — เช็คประกาศปีล่าสุดที่ rd.go.th ก่อนใช้')}
+
+      <div class="set-head">ทิปวางแผน</div>
+      <div class="empty" style="text-align:left;padding:8px 4px;font-size:13px;line-height:1.7">
+        · ใช้สิทธิ์กลุ่ม 1 (ของฟรี) ให้ครบก่อน ค่อยคิดเรื่องจ่ายเพิ่ม<br>
+        · ซื้อกองทุน/ประกันเฉพาะที่ตั้งใจออมอยู่แล้ว — เงินจะติดล็อกหลายปี อย่าซื้อแค่เพื่อลดภาษี<br>
+        · ยิ่งฐานภาษีสูงยิ่งคุ้ม: ลดหย่อนเพิ่ม ฿100 ประหยัดภาษีตามขั้นสูงสุดของเรา (5–35%)<br>
+        · ซื้อ/จ่ายให้ทันภายในสิ้นปีภาษีนั้น และเก็บหลักฐานทุกใบ (แนะนำ e-Tax Invoice / e-Donation)<br>
+        · กฎเปลี่ยนได้ทุกปี — เช็คของจริงที่ <b>rd.go.th</b> หรือ iTAX ก่อนยื่น</div>`;
   }
 
 
@@ -634,13 +710,7 @@
           ${[-3, -2, -1, 0].map((offset) => { const y = now.getFullYear() + offset; return `<option value="${y}" ${(st.taxYear || now.getFullYear()) === y ? 'selected' : ''}>${y + 543}</option>`; }).join('')}
         </select></div>
       <div class="set-head" style="font-size:12px;padding-top:6px;cursor:pointer" onclick="App.toggleTaxDedSection()">ค่าลดหย่อนประจำปี${taxDedOpen ? ' ▾' : ' ▸ (กดดู)'}</div>
-      ${taxDedOpen ? [
-        ['ประกันสังคม', 'socialSecurity', 'ถูกหักจากเงินเดือน 5% สูงสุด ฿9,000/ปี — ดูจากสลิปเงินเดือน'],
-        ['ประกันชีวิต/สุขภาพ', 'lifeInsurance', 'เบี้ยประกันชีวิต + ประกันสุขภาพ — รวมกันสูงสุด ฿100,000/ปี'],
-        ['RMF / SSF / กองทุน', 'rmf', 'กองทุนรวม RMF, SSF, กองทุนสำรองเลี้ยงชีพ — ดูจากหนังสือรับรองกองทุน'],
-        ['ลดหย่อนบิดา/มารดา', 'parents', 'หักได้ 30,000 บ./คน (สูงสุด 2 คน = 60,000) — บิดา/มารดาอายุ 60+ และรายได้ไม่เกิน 30,000/ปี'],
-        ['เงินบริจาค', 'donation', 'บริจาคทั่วไปหักได้ 1 เท่า · บริจาคการศึกษา/กีฬา/โรงพยาบาลรัฐหักได้ 2 เท่า'],
-      ].map(([lbl, k, desc]) => `<div class="set-item" style="align-items:flex-start;padding:12px 0"><div class="body"><div class="t">${lbl}</div><div class="s" style="line-height:1.5">${desc}</div></div><input class="input num" style="width:100px;margin-top:2px;flex-shrink:0" inputmode="decimal" value="${(st.taxDeductions || {})[k] || ''}" placeholder="0" onchange="App.setTaxDed('${k}',this.value)"></div>`).join('') : ''}
+      ${taxDedOpen ? DED_FIELDS.map(([k, lbl, desc]) => `<div class="set-item" style="align-items:flex-start;padding:12px 0"><div class="body"><div class="t">${lbl}</div><div class="s" style="line-height:1.5">${desc}</div></div><input class="input num" style="width:100px;margin-top:2px;flex-shrink:0" inputmode="decimal" value="${(st.taxDeductions || {})[k] || ''}" placeholder="0" onchange="App.setTaxDed('${k}',this.value)"></div>`).join('') : ''}
       ` : ''}
 
       <div class="divider"></div>
@@ -1167,6 +1237,8 @@
     setTaxDed(k, v) { const d = { ...(S.settings().taxDeductions || {}) }; d[k] = parseFloat(v) || 0; S.updateSettings({ taxDeductions: d }); if (current === 'tax') renderTax(); },
     toggleCatTax(id) { const c = S.category(id); if (!c || c.type !== 'income') return; S.updateCategory(id, { name: c.name, icon: c.icon, color: c.color, isTaxable: !c.isTaxable }); renderTax(); },
     toggleTaxCatSection() { taxCatOpen = !taxCatOpen; renderTax(); },
+    setTaxTab(v) { taxTab = v; renderTax(); const scr = $('#screen-tax'); if (scr) scr.scrollTop = 0; },
+    openTaxDed() { taxDedOpen = true; go('settings'); },
     toggleTaxDedSection() { taxDedOpen = !taxDedOpen; renderSettings(); },
     toggleChangelog() { changelogOpen = !changelogOpen; renderSettings(); },
 

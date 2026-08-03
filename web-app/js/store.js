@@ -225,7 +225,8 @@
     const totalIncome = taxableTHB + remitTHB;
     const expenseDeduction = Math.min(totalIncome * 0.5, 100000);
     const personalDeduction = 60000;
-    const otherDeductions = (ded.socialSecurity || 0) + (ded.lifeInsurance || 0) + (ded.rmf || 0) + (ded.parents || 0) + (ded.donation || 0);
+    // รวมทุกช่องที่กรอก (ช่องใหม่ ๆ นับอัตโนมัติ) — donationEdu นับ 2 เท่าตามกฎบริจาคการศึกษา/รพ.รัฐ
+    const otherDeductions = Object.entries(ded).reduce((s, [k, v]) => s + (Number(v) || 0) * (k === 'donationEdu' ? 2 : 1), 0);
     const totalDeductions = expenseDeduction + personalDeduction + otherDeductions;
     const netIncome = Math.max(0, totalIncome - totalDeductions);
     return { taxableTHB, remitTHB, totalIncome, expenseDeduction, personalDeduction, otherDeductions, totalDeductions, netIncome, estimatedTax: calcPIT(netIncome), year: y };
