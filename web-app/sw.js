@@ -1,11 +1,12 @@
 // Service worker — network-first (ออนไลน์ได้ล่าสุดเสมอ, ออฟไลน์ fallback แคช)
 // เด้งเลข CACHE ทุกครั้งที่ deploy เพื่อเคลียร์แคชเก่า
-const CACHE = 'ngern-v12';
+const CACHE = 'ngern-v13';
 const SHELL = [
   './',
   './index.html',
   './css/styles.css',
   './js/store.js',
+  './js/fx.js',
   './js/app.js',
   './manifest.webmanifest',
   './icon.svg',
@@ -29,6 +30,9 @@ self.addEventListener('fetch', (e) => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   const sameOrigin = url.origin === self.location.origin;
+
+  // API อัตราแลกเปลี่ยน: ห้ามแคช (cache-first จะค้างเรตเก่าถาวร) — app แคชเองใน localStorage
+  if (url.hostname === 'api.frankfurter.dev') return;
 
   if (sameOrigin) {
     // network-first: ดึงของใหม่ก่อนเสมอ อัปเดตแคช; ถ้าออฟไลน์ค่อยใช้แคช

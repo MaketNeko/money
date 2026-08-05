@@ -54,7 +54,7 @@
       bills: [],
       debts: [],
       foreignIncome: [],
-      settings: { reminderTime: '20:00', defaultWalletId: 'w_cash', mode: 'simple', taxEnabled: false, foreignIncomeEnabled: false, fxWalletsSeeded: true, taxYear: new Date().getFullYear(), taxDeductions: { socialSecurity: 0, lifeInsurance: 0, rmf: 0, parents: 0, donation: 0 } },
+      settings: { reminderTime: '20:00', defaultWalletId: 'w_cash', mode: 'simple', taxEnabled: false, foreignIncomeEnabled: false, fxWalletsSeeded: true, incomeSourceTH: true, taxYear: new Date().getFullYear(), taxDeductions: { socialSecurity: 0, lifeInsurance: 0, rmf: 0, parents: 0, donation: 0 } },
     };
   }
 
@@ -79,6 +79,7 @@
     if (!Array.isArray(data.foreignIncome)) data.foreignIncome = [];
     if (data.settings.taxEnabled == null) data.settings.taxEnabled = false;
     if (data.settings.foreignIncomeEnabled == null) data.settings.foreignIncomeEnabled = false;
+    if (data.settings.incomeSourceTH == null) data.settings.incomeSourceTH = true;
     if (!data.settings.taxYear) data.settings.taxYear = new Date().getFullYear();
     if (!data.settings.taxDeductions) data.settings.taxDeductions = { socialSecurity: 0, lifeInsurance: 0, rmf: 0, parents: 0, donation: 0 };
     for (const t of data.transactions || []) if (!t.walletId) t.walletId = data.settings.defaultWalletId;
@@ -208,28 +209,44 @@
     }
     return Math.round(tax);
   }
+  /* incomeSourceTH = true  → ถือว่างานทุกอย่างทำในไทย (ม.41 วรรคหนึ่ง)
+       รายรับเข้าฐานภาษี "ทันทีที่รับเงิน" ทุกกระเป๋า — กระเป๋าต่างสกุลใช้ยอดบาท
+       ที่ล็อกไว้ตอนบันทึก (thbAmount) และ remit transfer จะไม่ถูกนับซ้ำ
+     incomeSourceTH = false → เงินได้จากแหล่งนอกประเทศ (ม.41 วรรคสอง)
+       นับเฉพาะกระเป๋า THB + ตอน "โอนเข้าไทย" (remit) แบบเดิม */
   function taxSummary(year) {
     const y = year || data.settings.taxYear || new Date().getFullYear();
     const ded = data.settings.taxDeductions || {};
-    // นับเฉพาะรายรับที่อยู่ในกระเป๋า THB เท่านั้น (รายได้ต่างประเทศจะถูกนับตอน "โอนเข้าไทย" = สร้างรายรับ THB)
+    const srcTH = data.settings.incomeSourceTH !== false;
     const thbWalletIds = new Set(data.wallets.filter((w) => (w.currency || 'THB') === 'THB').map((w) => w.id));
     const inYear = (d) => d >= `${y}-01-01` && d <= `${y}-12-31`;
-    const txs = data.transactions.filter((t) => t.type === 'income' && thbWalletIds.has(t.walletId) && inYear(t.date));
-    const taxableTHB = txs.reduce((s, t) => { const c = catById(t.categoryId); return c && c.isTaxable ? s + t.amount : s; }, 0);
-    // รายได้ต่างประเทศที่โอนเข้าไทย (remit transfer เข้ากระเป๋า THB, หมวดที่ tag ภาษี) — นับยอด THB ปลายทาง
-    const remitTHB = data.transactions.reduce((s, t) => {
+
+    let taxableTHB = 0, taxableFX = 0, missingRate = 0;
+    for (const t of data.transactions) {
+      if (t.type !== 'income' || !inYear(t.date)) continue;
+      const c = catById(t.categoryId); if (!c || !c.isTaxable) continue;
+      if (thbWalletIds.has(t.walletId)) { taxableTHB += t.amount; continue; }
+      if (!srcTH) continue;                         // โหมด remittance: รอโอนเข้าไทยก่อน
+      if (t.thbAmount != null) taxableFX += t.thbAmount;
+      else missingRate++;                           // ยังไม่มีเรต → เตือนให้เติม
+    }
+
+    // รายได้ต่างประเทศที่โอนเข้าไทย (remit transfer เข้ากระเป๋า THB, หมวดที่ tag ภาษี)
+    // นับเฉพาะโหมด remittance เท่านั้น ไม่งั้นซ้ำกับที่นับไปแล้วตอนรับเงิน
+    const remitTHB = srcTH ? 0 : data.transactions.reduce((s, t) => {
       if (t.type !== 'transfer' || !t.remit || !thbWalletIds.has(t.toWalletId) || !inYear(t.date)) return s;
       const c = catById(t.categoryId); if (!c || !c.isTaxable) return s;
       return s + (t.toAmount != null ? t.toAmount : t.amount);
     }, 0);
-    const totalIncome = taxableTHB + remitTHB;
+
+    const totalIncome = taxableTHB + taxableFX + remitTHB;
     const expenseDeduction = Math.min(totalIncome * 0.5, 100000);
     const personalDeduction = 60000;
     // รวมทุกช่องที่กรอก (ช่องใหม่ ๆ นับอัตโนมัติ) — donationEdu นับ 2 เท่าตามกฎบริจาคการศึกษา/รพ.รัฐ
     const otherDeductions = Object.entries(ded).reduce((s, [k, v]) => s + (Number(v) || 0) * (k === 'donationEdu' ? 2 : 1), 0);
     const totalDeductions = expenseDeduction + personalDeduction + otherDeductions;
     const netIncome = Math.max(0, totalIncome - totalDeductions);
-    return { taxableTHB, remitTHB, totalIncome, expenseDeduction, personalDeduction, otherDeductions, totalDeductions, netIncome, estimatedTax: calcPIT(netIncome), year: y };
+    return { taxableTHB, taxableFX, remitTHB, missingRate, srcTH, totalIncome, expenseDeduction, personalDeduction, otherDeductions, totalDeductions, netIncome, estimatedTax: calcPIT(netIncome), year: y };
   }
 
   /* =========================================================
@@ -277,7 +294,17 @@
     addTransaction(tx) {
       const rec = { id: uid('t'), type: tx.type, amount: Number(tx.amount), categoryId: tx.categoryId,
         walletId: tx.walletId || data.settings.defaultWalletId, date: tx.date || todayISO(), note: tx.note || '' };
+      // รายรับกระเป๋าต่างสกุล: ล็อกเรต ณ วันรับเงิน + ยอดบาท ติดไปกับรายการ (ไม่เปลี่ยนย้อนหลัง)
+      if (tx.fxRate) {
+        rec.fxRate = Number(tx.fxRate);
+        rec.thbAmount = tx.thbAmount != null ? Number(tx.thbAmount) : Math.round(rec.amount * rec.fxRate * 100) / 100;
+      }
       data.transactions.push(rec); persist(); return rec;
+    },
+    // รายรับในกระเป๋าต่างสกุลที่ยังไม่มีเรต — ใช้กับปุ่ม "เติมเรตย้อนหลัง"
+    fxIncomeMissingRate() {
+      const fxIds = new Set(data.wallets.filter((w) => (w.currency || 'THB') !== 'THB').map((w) => w.id));
+      return data.transactions.filter((t) => t.type === 'income' && fxIds.has(t.walletId) && t.thbAmount == null);
     },
     addTransfer(tr) {
       const rec = { id: uid('t'), type: 'transfer', amount: Number(tr.amount),

@@ -20,6 +20,12 @@
   /* ---------- บันทึกการอัปเดต (แสดงในตั้งค่า > เกี่ยวกับ) ----------
      ทุกครั้งที่อัปเดตแอป เพิ่มรายการใหม่ไว้บนสุด */
   const CHANGELOG = [
+    { v: '0.14', date: '5 ส.ค. 2569', items: [
+      'แก้หลักการนับภาษีให้ตรงกฎหมาย: เพิ่มสวิตช์ "ถือว่างานทุกอย่างทำในไทย" (เปิดไว้เป็นค่าเริ่มต้น) — ตาม ม.41 วรรคหนึ่ง ถ้าเรานั่งทำงานอยู่ในไทย เงินได้ต้องเสียภาษีทันทีที่รับเงิน ไม่ว่าจะรับเข้ากระเป๋าสกุลไหนหรือยังไม่โอนเข้าไทยก็ตาม (ของเดิมนับเฉพาะตอนโอนเข้าไทย ซึ่งใช้ได้เฉพาะกรณีทำงานอยู่นอกประเทศจริง ๆ)',
+      'ลงรายรับในกระเป๋าต่างสกุล: มีช่องอัตราแลกเปลี่ยน พร้อม "ดึงเรตอัตโนมัติ" ตามวันที่ของรายการ (ข้อมูล ECB) แก้ทับเองได้ — เรตจะถูกล็อกติดไปกับรายการ ไม่เปลี่ยนย้อนหลัง',
+      'เพิ่มปุ่ม "เติมเรตย้อนหลัง" ในตั้งค่า > ภาษี — ไล่ดึงเรตให้รายรับเก่าที่ยังไม่มีเรตทีเดียวจบ',
+      'หน้าภาษีแยกบรรทัด "รายได้กระเป๋าต่างสกุล" ให้เห็นชัด และเตือนถ้ายังมีรายการที่ไม่มีเรต (ยอดจะต่ำกว่าจริง)',
+    ] },
     { v: '0.13', date: '3 ส.ค. 2569', items: [
       'หน้าหนี้: เพิ่มโหมด "เลือกเคลีย" — ติ๊กเลือกหนี้หลายก้อน (ติ๊กทั้งคนทีเดียว หรือแยกทีละก้อนก็ได้) แล้วกดเคลียรวดเดียว ไม่ต้องเปิดทีละรายการ',
       'ก่อนเคลียมีสรุปให้ดู: ยอดที่ต้องจ่ายออก / รับเข้า และผลรวมต่อกระเป๋า เลือกกระเป๋ากับวันที่ครั้งเดียวใช้กับทุกก้อน (ลงชำระเต็มยอดคงเหลือ)',
@@ -533,10 +539,14 @@
         </div>
         <div class="section" style="margin-top:16px"><span>รายได้ที่ต้องเสียภาษี</span></div>
         <div class="tax-rows">
-          <div class="tax-row"><span>รายได้ THB (หมวดที่ tag)</span><span class="num">฿${fmt(ts.taxableTHB)}</span></div>
+          <div class="tax-row"><span>รายได้กระเป๋าบาท</span><span class="num">฿${fmt(ts.taxableTHB)}</span></div>
+          ${ts.taxableFX > 0 ? `<div class="tax-row"><span>รายได้กระเป๋าต่างสกุล (แปลงตามเรตวันรับเงิน)</span><span class="num">฿${fmt(ts.taxableFX)}</span></div>` : ''}
           ${ts.remitTHB > 0 ? `<div class="tax-row"><span>รายได้ต่างประเทศ (โอนเข้าไทย)</span><span class="num">฿${fmt(ts.remitTHB)}</span></div>` : ''}
           <div class="tax-row total"><span>รายได้รวม</span><span class="num">฿${fmt(ts.totalIncome)}</span></div>
         </div>
+        ${ts.missingRate > 0 ? `<div class="empty" style="text-align:left;padding:10px 12px;margin-top:10px;font-size:12.5px;line-height:1.6;background:var(--surface);border-radius:12px">
+          ⚠️ มีรายรับ <b>${ts.missingRate} รายการ</b> ในกระเป๋าต่างสกุลที่ยังไม่มีอัตราแลกเปลี่ยน — ยอดข้างบนจึง<b>ต่ำกว่าความจริง</b><br>
+          <button class="link" onclick="App.go('settings')">ไปที่ตั้งค่า → กด "เติมเรตย้อนหลัง" →</button></div>` : ''}
         <div class="section" style="margin-top:16px"><span>หักค่าใช้จ่าย + ลดหย่อน</span></div>
         <div class="tax-rows">
           ${dedRows}
@@ -553,7 +563,9 @@
         </div>`).join('') : ''}`;
     }
 
-    html += `<div class="empty" style="text-align:left;padding:12px 4px;font-size:12px">* ตัวเลขนี้เป็นการประมาณการ — ยืนยันกับผู้เชี่ยวชาญด้านภาษีก่อนยื่น<br>* รายได้ต่างประเทศจะถูกนับเข้าภาษีเมื่อ "โอนเข้าไทย" (แปลงจากกระเป๋า USD → THB)</div>`;
+    html += `<div class="empty" style="text-align:left;padding:12px 4px;font-size:12px;line-height:1.6">* ตัวเลขนี้เป็นการประมาณการ — ยืนยันกับผู้เชี่ยวชาญด้านภาษีก่อนยื่น<br>${S.settings().incomeSourceTH !== false
+      ? '* โหมด "งานทำในไทย": รายรับทุกกระเป๋าถูกนับทันทีที่รับเงิน ตาม ม.41 วรรคหนึ่ง — ไม่ต้องรอโอนเข้าไทย'
+      : '* โหมด "รายได้จากต่างประเทศ": รายรับกระเป๋าต่างสกุลจะถูกนับเมื่อ "โอนเข้าไทย" เท่านั้น ตาม ม.41 วรรคสอง'}<br>* เปลี่ยนโหมดได้ที่ ตั้งค่า → ภาษี</div>`;
     $('#screen-tax').innerHTML = html;
   }
 
@@ -617,12 +629,14 @@
     fxConvert = { walletId, currency: w.currency, dir: dir === 'out' ? 'out' : 'in',
       fromAmount: dir !== 'out' && bal > 0 ? String(Math.round(bal * 100) / 100) : '', toAmount: '', fxRate: '',
       thbWalletId: S.defaultWalletId(), catId: (S.categories('income').find((c) => c.isTaxable) || S.categories('income')[0] || {}).id,
-      date: S.todayISO(), taxable: true };
+      // โหมด "งานทำในไทย" นับภาษีไปแล้วตอนรับเงิน — ตรงนี้เป็นแค่การย้ายเงิน ห้ามนับซ้ำ
+      date: S.todayISO(), taxable: S.settings().incomeSourceTH === false };
     renderFXConvert();
   }
   function renderFXConvert() {
     const w = S.wallet(fxConvert.walletId); if (!w) return;
     const cur = fxConvert.currency; const isIn = fxConvert.dir === 'in';
+    const srcTH = S.settings().incomeSourceTH !== false;
     const bal = S.walletBalance(fxConvert.walletId);
     const thbWallets = S.wallets().filter((x) => (x.currency || 'THB') === 'THB' && x.enabled !== false);
     const catChips = S.categories('income').map((c) => `<span class="cchip ${fxConvert.catId === c.id ? 'on' : ''}" onclick="App.fxPick('catId','${c.id}')">${esc(c.name)}${c.isTaxable ? ' <span class="tax-badge">ภาษี</span>' : ''}</span>`).join('');
@@ -645,8 +659,10 @@
       <input class="input num" id="fxTo" inputmode="decimal" value="${fxConvert.toAmount}" placeholder="0" oninput="App._fxSync('toAmount',this.value)">
       <div class="field-label">วันที่</div>
       <input class="input" type="date" id="fxDate" value="${fxConvert.date}" max="${S.todayISO()}" onchange="App._fxSync('date',this.value)">
-      ${isIn ? `<div class="switch-row" style="margin-top:12px"><div class="txt"><div class="t">นับเป็นรายได้ (เสียภาษี)</div><div class="s">ปิดถ้าเป็นเงินของคุณเองที่เคยฝากเข้าไป — เป็นแค่การโอนกลับ ไม่นับภาษี</div></div><button class="sw-ui ${fxConvert.taxable ? 'on' : ''}" onclick="App.fxToggleTaxable()"></button></div>
-      ${fxConvert.taxable ? `<div class="field-label">หมวดหมู่รายรับ</div><div class="wrap-chips">${catChips}</div>` : ''}` : ''}
+      ${isIn ? (srcTH
+        ? `<div class="empty" style="text-align:left;padding:10px 12px;margin-top:12px;font-size:12.5px;line-height:1.6;background:var(--surface);border-radius:12px">รายการนี้ <b>ไม่นับภาษีซ้ำ</b> — โหมด "งานทำในไทย" นับรายรับเข้าฐานภาษีไปแล้วตั้งแต่ตอนรับเงินเข้ากระเป๋า ${esc(w.name)} ตรงนี้เป็นแค่การย้ายเงินเข้าบัญชีไทย</div>`
+        : `<div class="switch-row" style="margin-top:12px"><div class="txt"><div class="t">นับเป็นรายได้ (เสียภาษี)</div><div class="s">ปิดถ้าเป็นเงินของคุณเองที่เคยฝากเข้าไป — เป็นแค่การโอนกลับ ไม่นับภาษี</div></div><button class="sw-ui ${fxConvert.taxable ? 'on' : ''}" onclick="App.fxToggleTaxable()"></button></div>
+      ${fxConvert.taxable ? `<div class="field-label">หมวดหมู่รายรับ</div><div class="wrap-chips">${catChips}</div>` : ''}`) : ''}
       <button class="btn-primary" onclick="App.saveFXConvert()">${!isIn ? 'บันทึกการฝากเข้า' : fxConvert.taxable ? 'บันทึก + นับเป็นรายได้' : 'บันทึกการโอนกลับ'}</button>`;
     sheetWrap(inner, 'fxconvert');
   }
@@ -703,6 +719,7 @@
      ========================================================= */
   function renderSettings() {
     const st = S.settings(); const adv = mode() === 'advanced';
+    const fxMissing = S.fxIncomeMissingRate().length;
     const canNotify = 'Notification' in window;
     const notifyOn = !!st.notifyEnabled && canNotify && Notification.permission === 'granted';
     let notifyDesc = 'เด้งเตือนบิล/ลงรายจ่ายเป็นแจ้งเตือนของเครื่อง ตอนเปิดแอป';
@@ -745,6 +762,13 @@
         <div class="body"><div class="t">ติดตามรายได้ต่างประเทศ</div><div class="s">บันทึก USD/EUR รอโอนเข้าไทย · แปลงเป็น THB · เพิ่มตอนลงเงิน</div></div>
         <button class="sw-ui ${st.foreignIncomeEnabled ? 'on' : ''}" onclick="App.setForeignIncomeEnabled()"></button></div>
       ${st.taxEnabled ? `
+      <div class="set-item" style="align-items:flex-start"><span class="ic" style="margin-top:2px">${icon('i-home')}</span>
+        <div class="body"><div class="t">ถือว่างานทุกอย่างทำในไทย</div><div class="s" style="line-height:1.5">${st.incomeSourceTH !== false
+          ? 'รายรับทุกกระเป๋าเข้าฐานภาษีทันทีที่รับเงิน (ม.41 วรรคหนึ่ง) — ถูกต้องถ้าเรานั่งทำงานอยู่ในไทย แม้ลูกค้าจะเป็นต่างชาติ'
+          : 'นับเฉพาะกระเป๋าบาท + ตอนโอนเข้าไทย (ม.41 วรรคสอง) — ใช้ได้เฉพาะกรณีทำงาน/มีทรัพย์สินอยู่นอกประเทศจริง ๆ'}</div></div>
+        <button class="sw-ui ${st.incomeSourceTH !== false ? 'on' : ''}" style="margin-top:2px" onclick="App.setIncomeSourceTH()"></button></div>
+      ${fxMissing ? `<button class="set-item" onclick="App.backfillRates()"><span class="ic">${icon('i-transfer')}</span>
+        <div class="body"><div class="t">เติมเรตย้อนหลัง (${fxMissing} รายการ)</div><div class="s">ดึงอัตราแลกเปลี่ยนตามวันที่ของแต่ละรายการให้อัตโนมัติ</div></div>${icon('i-chev', 'sm')}</button>` : ''}
       <div class="set-item"><span class="ic">${icon('i-cal')}</span>
         <div class="body"><div class="t">ปีภาษี</div><div class="s">ปีที่คำนวณรายได้</div></div>
         <select class="input" style="width:110px;padding:6px 8px" onchange="App.setTaxYear(Number(this.value))">
@@ -789,16 +813,74 @@
     const defW = S.defaultWalletId();
     const second = (S.wallets().find((w) => w.id !== defW && (w.currency || 'THB') === 'THB') || {}).id || defW;
     add = t
-      ? { id: t.id, type: t.type, amount: String(t.amount), toAmount: t.toAmount != null ? String(t.toAmount) : '', categoryId: t.categoryId || null, walletId: t.walletId || defW, toWalletId: t.toWalletId || second, date: t.date, note: t.note || '' }
-      : { id: null, type: 'expense', amount: '0', toAmount: '', categoryId: null, walletId: defW, toWalletId: second, date: S.todayISO(), note: '' };
+      ? { id: t.id, type: t.type, amount: String(t.amount), toAmount: t.toAmount != null ? String(t.toAmount) : '', categoryId: t.categoryId || null, walletId: t.walletId || defW, toWalletId: t.toWalletId || second, date: t.date, note: t.note || '', fxRate: t.fxRate != null ? String(t.fxRate) : '', fxManual: t.fxRate != null }
+      : { id: null, type: 'expense', amount: '0', toAmount: '', categoryId: null, walletId: defW, toWalletId: second, date: S.todayISO(), note: '', fxRate: '', fxManual: false };
     if (add.type !== 'transfer' && !add.categoryId) { const c = S.categories(add.type)[0]; add.categoryId = c && c.id; }
-    renderAdd();
+    renderAdd(); fxAutoFill();
   }
   function openTransfer() {
     const defW = S.defaultWalletId();
     const second = (S.wallets().find((w) => w.id !== defW && (w.currency || 'THB') === 'THB') || {}).id || defW;
-    add = { id: null, type: 'transfer', amount: '0', toAmount: '', categoryId: null, walletId: defW, toWalletId: second, date: S.todayISO(), note: '' };
+    add = { id: null, type: 'transfer', amount: '0', toAmount: '', categoryId: null, walletId: defW, toWalletId: second, date: S.todayISO(), note: '', fxRate: '', fxManual: false };
     renderAdd();
+  }
+
+  /* ---------- อัตราแลกเปลี่ยนในหน้าลงเงิน (เฉพาะรายรับกระเป๋าต่างสกุล) ----------
+     เรตจะถูกล็อกติดไปกับรายการตอนบันทึก — ดึงอัตโนมัติได้ แต่แก้ทับเองได้เสมอ */
+  const addCurrencyOf = () => {
+    if (!add || add.type === 'transfer') return 'THB';
+    const w = S.wallet(add.walletId); return (w && w.currency) || 'THB';
+  };
+  const addNeedsRate = () => add && add.type === 'income' && addCurrencyOf() !== 'THB';
+  const addThb = () => {
+    const r = parseFloat(add.fxRate) || 0;
+    return r > 0 ? Math.round((parseFloat(add.amount) || 0) * r * 100) / 100 : 0;
+  };
+
+  function fxPreviewHtml() {
+    if (!addNeedsRate()) return '<span id="fxPreview"></span>';
+    const thb = addThb();
+    return `<span id="fxPreview">${thb > 0
+      ? `เข้าฐานภาษี <b>฿${fmt(thb)}</b>`
+      : 'ยังไม่ใส่เรต — บันทึกได้ แต่รายการนี้จะยังไม่ถูกนับภาษี'}</span>`;
+  }
+  function fxBlockHtml() {
+    if (!addNeedsRate()) return '<div id="fxBlock"></div>';
+    const cur = addCurrencyOf();
+    const tag = add.fxBusy ? 'กำลังดึงเรต…'
+      : add.fxManual ? 'กรอกเอง'
+      : add.fxSource === 'fail' ? 'ดึงไม่ได้ — กรอกเอง'
+      : add.fxSource ? 'ดึงอัตโนมัติ (ECB)' : '';
+    return `<div id="fxBlock">
+      <div class="field-label" style="display:flex;justify-content:space-between;gap:8px;align-items:baseline">
+        <span>อัตราแลกเปลี่ยน (บาท ต่อ 1 ${cur}) ณ วันที่รับเงิน</span>
+        <span style="font-size:11px;color:var(--muted);font-weight:400;flex-shrink:0">${tag}</span></div>
+      <input class="input num" id="addRate" inputmode="decimal" value="${esc(add.fxRate)}" placeholder="เช่น 33.30" oninput="App.setFxRate(this.value)">
+      <div class="empty" style="text-align:left;padding:6px 2px;font-size:12px">${fxPreviewHtml()}
+        · <button class="link" onclick="App.fxRefetch()">ดึงเรตใหม่</button></div>
+    </div>`;
+  }
+  function paintFxBlock() {
+    const el = $('#fxBlock'); if (!el) return;
+    // กำลังพิมพ์เรตอยู่ → อัปเดตแค่บรรทัดยอดบาท จะได้ไม่หลุดโฟกัส
+    if (document.activeElement && document.activeElement.id === 'addRate') { paintFxPreview(); return; }
+    el.outerHTML = fxBlockHtml();
+  }
+  function paintFxPreview() { const el = $('#fxPreview'); if (el) el.outerHTML = fxPreviewHtml(); }
+
+  async function fxAutoFill(force) {
+    if (!addNeedsRate() || !window.FX) return;
+    if (!force && (add.fxManual || add.fxRate)) return;
+    const cur = addCurrencyOf();
+    const stamp = add.date + '|' + cur;
+    if (!force && add._fxStamp === stamp) return; // ชุดนี้ดึงไปแล้ว
+    add._fxStamp = stamp; add.fxBusy = true; paintFxBlock();
+    const r = await window.FX.rate(add.date, cur);
+    if (!add || add._fxStamp !== stamp) return;   // ผู้ใช้เปลี่ยนวันที่/กระเป๋าไปแล้ว ทิ้งผลเก่า
+    add.fxBusy = false;
+    if (r) { add.fxRate = String(r.rate); add.fxManual = false; add.fxSource = 'auto'; }
+    else { add.fxSource = 'fail'; }
+    paintFxBlock();
   }
 
   function renderAdd() {
@@ -824,7 +906,7 @@
       const cats = S.categories(add.type);
       const chips = cats.map((c) => `<div class="chip ${c.id === add.categoryId ? 'sel' : ''}" onclick="App.pickCat('${c.id}')">${icon(c.icon)}<span class="nm">${esc(c.name)}</span></div>`).join('') +
         `<div class="chip add" onclick="App.quickAddCat()">${icon('i-plus')}<span class="nm">เพิ่มหมวด</span></div>`;
-      body = `<div class="chips">${chips}</div>${adv ? `<div class="field-label" style="margin-top:4px">กระเป๋า</div><div class="wrap-chips">${walletChips(add.walletId, 'App.pickWallet')}</div>` : ''}`;
+      body = `<div class="chips">${chips}</div>${adv ? `<div class="field-label" style="margin-top:4px">กระเป๋า</div><div class="wrap-chips">${walletChips(add.walletId, 'App.pickWallet')}</div>` : ''}${fxBlockHtml()}`;
     }
 
     const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'bs'];
@@ -1122,12 +1204,17 @@
     payBill(id, ym) { S.toggleBillPaid(id, ym); toast('บันทึกว่าจ่ายแล้ว'); render(current); },
 
     // add sheet
-    setKind(k) { add.type = k; if (k !== 'transfer') { const c = S.categories(k).find((x) => x.id === add.categoryId) || S.categories(k)[0]; add.categoryId = c && c.id; } renderAdd(); },
+    setKind(k) { add.type = k; if (k !== 'transfer') { const c = S.categories(k).find((x) => x.id === add.categoryId) || S.categories(k)[0]; add.categoryId = c && c.id; } renderAdd(); fxAutoFill(); },
     pickCat(id) { add.categoryId = id; renderAdd(); },
-    pickWallet(id) { add.walletId = id; renderAdd(); },
+    pickWallet(id) {
+      const prev = addCurrencyOf(); add.walletId = id;
+      // เปลี่ยนสกุลเงิน → เรตเดิมใช้ไม่ได้แล้ว ล้างทิ้งแล้วดึงใหม่
+      if (addCurrencyOf() !== prev) { add.fxRate = ''; add.fxManual = false; add.fxSource = null; }
+      renderAdd(); fxAutoFill();
+    },
     transFrom(id) { add.walletId = id; if (add.toWalletId === id) add.toWalletId = (S.wallets().find((w) => w.id !== id && (w.currency || 'THB') === 'THB') || {}).id; renderAdd(); },
     transTo(id) { add.toWalletId = id; if (add.walletId === id) add.walletId = (S.wallets().find((w) => w.id !== id && (w.currency || 'THB') === 'THB') || {}).id; renderAdd(); },
-    setDate(v) { add.date = v; },
+    setDate(v) { add.date = v; if (!add.fxManual) fxAutoFill(true); }, // เรตที่ดึงเองตามวันที่ไป, เรตที่กรอกมือไม่แตะ
     setNote(v) { add.note = v; },
     setToAmount(v) { if (add) add.toAmount = v; },
     key(k) {
@@ -1135,8 +1222,10 @@
       if (k === 'bs') a = a.length > 1 ? a.slice(0, -1) : '0';
       else if (k === '.') { if (!a.includes('.')) a += '.'; }
       else { if (a === '0') a = k; else if (/\.\d\d$/.test(a)) return; else a += k; }
-      add.amount = a; $('#amtVal').textContent = displayAmount(a);
+      add.amount = a; $('#amtVal').textContent = displayAmount(a); paintFxPreview();
     },
+    setFxRate(v) { if (!add) return; add.fxRate = v; add.fxManual = true; add.fxSource = null; paintFxPreview(); },
+    fxRefetch() { if (add) { add.fxManual = false; fxAutoFill(true); } },
     saveTx() {
       const amt = parseFloat(add.amount);
       if (!amt || amt <= 0) { toast('ใส่จำนวนเงินก่อน'); return; }
@@ -1150,6 +1239,10 @@
         else S.addTransfer({ fromWalletId: add.walletId, toWalletId: add.toWalletId, amount: amt, toAmount: isCross ? toAmt : null, date: add.date, note: add.note });
       } else {
         const payload = { type: add.type, amount: amt, categoryId: add.categoryId, walletId: add.walletId, date: add.date, note: add.note };
+        // ล็อกเรต ณ วันรับเงิน ติดไปกับรายการ (null = ยังไม่มีเรต → ยังไม่ถูกนับภาษี)
+        const r = addNeedsRate() ? (parseFloat(add.fxRate) || 0) : 0;
+        payload.fxRate = r > 0 ? r : null;
+        payload.thbAmount = r > 0 ? Math.round(amt * r * 100) / 100 : null;
         if (add.id) S.updateTransaction(add.id, payload); else S.addTransaction(payload);
       }
       if (add.id) { closeSheet(); toast('แก้ไขแล้ว'); render(current); return; }
@@ -1250,7 +1343,8 @@
       if (isIn) {
         // ถอน: ต่างชาติ → THB. remit เฉพาะตอนนับเป็นรายได้
         tr = { fromWalletId: fxConvert.walletId, toWalletId: fxConvert.thbWalletId, amount: fromAmt, toAmount: toAmt, date: fxConvert.date, note: (w ? w.name : '') + ' ถอน ' + cur + ' ' + fromAmt + (rate ? ' @ ' + rate : '') };
-        if (fxConvert.taxable) { tr.remit = true; tr.categoryId = fxConvert.catId; }
+        // โหมด "งานทำในไทย" นับภาษีตอนรับเงินไปแล้ว — ห้าม tag remit ไม่งั้นซ้ำ
+        if (fxConvert.taxable && S.settings().incomeSourceTH === false) { tr.remit = true; tr.categoryId = fxConvert.catId; }
       } else {
         // ฝาก: THB → ต่างชาติ (ไม่นับภาษี). toAmount = ยอดต่างชาติที่เข้าจริง
         tr = { fromWalletId: fxConvert.thbWalletId, toWalletId: fxConvert.walletId, amount: fromAmt, toAmount: toAmt, date: fxConvert.date, note: 'ฝากเข้า ' + (w ? w.name : '') + ' ฿' + fromAmt + (rate ? ' @ ' + rate : '') };
@@ -1333,6 +1427,24 @@
     setTaxTab(v) { taxTab = v; renderTax(); const scr = $('#screen-tax'); if (scr) scr.scrollTop = 0; },
     openTaxDed() { taxDedOpen = true; go('settings'); },
     toggleTaxDedSection() { taxDedOpen = !taxDedOpen; renderSettings(); },
+    setIncomeSourceTH() { S.updateSettings({ incomeSourceTH: S.settings().incomeSourceTH === false }); renderSettings(); },
+    // ไล่ดึงเรตให้รายรับเก่าในกระเป๋าต่างสกุลที่ยังไม่มีเรต (เรตซ้ำวันเดิมใช้แคช ไม่ยิงซ้ำ)
+    async backfillRates() {
+      if (!window.FX) return;
+      const list = S.fxIncomeMissingRate();
+      if (!list.length) { toast('ไม่มีรายการที่ต้องเติม'); return; }
+      toast(`กำลังดึงเรต ${list.length} รายการ…`);
+      let ok = 0, fail = 0;
+      for (const t of list) {
+        const w = S.wallet(t.walletId);
+        const r = await window.FX.rate(t.date, (w && w.currency) || 'USD');
+        if (!r) { fail++; continue; }
+        S.updateTransaction(t.id, { fxRate: r.rate, thbAmount: Math.round(t.amount * r.rate * 100) / 100 });
+        ok++;
+      }
+      renderSettings();
+      toast(fail ? `เติมแล้ว ${ok} · ดึงไม่ได้ ${fail} (ลองใหม่ตอนออนไลน์)` : `เติมเรตครบ ${ok} รายการ ✓`);
+    },
     toggleChangelog() { changelogOpen = !changelogOpen; renderSettings(); },
 
     // settings
