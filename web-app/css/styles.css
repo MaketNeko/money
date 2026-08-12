@@ -261,6 +261,18 @@ button { font-family:inherit; }
 .cchip.on { background:rgba(45,212,191,.20); color:var(--ink); border-color:var(--trust); }
 .cchip.add { border:1px dashed var(--divider); color:var(--trust); }
 .cchip .x { display:inline-flex; align-items:center; font-size:16px; line-height:1; opacity:.8; }
+.cchip-bal { font-weight:600; font-size:12px; opacity:.75; font-variant-numeric:tabular-nums; }
+.cchip.on .cchip-bal { opacity:1; }
+.cchip-bal.neg { color:var(--expense); opacity:1; }
+
+/* บรรทัดยอดคงเหลือในหน้าลงเงิน */
+.bal-line { display:flex; flex-wrap:wrap; justify-content:center; gap:4px 16px; font-size:12.5px;
+  color:var(--muted); margin:-2px 0 12px; font-variant-numeric:tabular-nums; }
+.bal-line:empty { display:none; }
+.bal-seg i { font-style:normal; opacity:.8; }
+.bal-seg em { font-style:normal; opacity:.6; margin:0 1px; }
+.bal-seg b { color:var(--ink); font-weight:600; }
+.bal-seg b.neg { color:var(--expense); }
 .btn-primary { width:100%; height:52px; margin-top:20px; border:none; border-radius:12px; background:var(--trust); color:var(--on-trust); font-weight:600; font-size:16px; cursor:pointer; }
 .btn-ghost { width:100%; height:48px; margin-top:10px; border:1px solid var(--divider); border-radius:12px; background:none; color:var(--muted); font-weight:600; font-size:15px; cursor:pointer; }
 .range-days { display:grid; grid-template-columns:repeat(auto-fit,minmax(60px,1fr)); gap:6px; }
@@ -370,6 +382,22 @@ button { font-family:inherit; }
 .tax-row:last-child { border-bottom:none; }
 .tax-row.total { font-weight:600; background:var(--surface-hi); }
 .tax-badge { font-size:11px; color:var(--trust); background:rgba(45,212,191,.15); padding:2px 7px; border-radius:10px; margin-left:6px; }
+
+/* กดกางดูว่ายอดมาจากรายการไหนบ้าง */
+.tax-row.tap { cursor:pointer; -webkit-tap-highlight-color:transparent; }
+.tax-row.tap:active { background:var(--surface-hi); }
+.tax-row .caret { font-size:10px; color:var(--muted); margin-left:6px; display:inline-block; transition:transform .15s; }
+.tax-row.open .caret { transform:rotate(90deg); }
+.tax-row.muted { color:var(--muted); }
+.tax-detail { background:var(--surface-hi); border-bottom:1px solid var(--divider); padding:2px 0; }
+.tax-detail:last-child { border-bottom:none; }
+.tax-di { display:flex; align-items:center; gap:8px; padding:7px 14px 7px 20px; font-size:12.5px; }
+.tax-di .d { color:var(--muted); flex-shrink:0; min-width:52px; }
+.tax-di .m { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.tax-di .m i { color:var(--muted); font-style:normal; }
+.tax-di .a { flex-shrink:0; font-weight:600; }
+.tax-di .a small { display:block; font-weight:400; color:var(--muted); font-size:11px; text-align:right; }
+.tax-di.none { color:var(--muted); justify-content:center; padding:10px; }
 
 /* ===========================================================
    เลย์เอาต์จอกว้าง (PC / แท็บเล็ตแนวนอน ≥900px)

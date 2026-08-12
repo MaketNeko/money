@@ -249,6 +249,40 @@
     return { taxableTHB, taxableFX, remitTHB, missingRate, srcTH, totalIncome, expenseDeduction, personalDeduction, otherDeductions, totalDeductions, netIncome, estimatedTax: calcPIT(netIncome), year: y };
   }
 
+  /* รายละเอียดว่ายอดในหน้าภาษีมาจากรายการไหนบ้าง — ใช้ตรรกะชุดเดียวกับ taxSummary()
+     คืนเป็นกลุ่ม ๆ ตรงกับบรรทัดสรุป + กลุ่ม "ยังไม่ถูกนับ" เพื่อให้ตรวจสอบได้ */
+  function taxDetail(year) {
+    const y = year || data.settings.taxYear || new Date().getFullYear();
+    const srcTH = data.settings.incomeSourceTH !== false;
+    const thbWalletIds = new Set(data.wallets.filter((w) => (w.currency || 'THB') === 'THB').map((w) => w.id));
+    const inYear = (d) => d >= `${y}-01-01` && d <= `${y}-12-31`;
+    const thb = [], fx = [], noRate = [], remit = [], pending = [];
+
+    for (const t of data.transactions) {
+      const c = catById(t.categoryId);
+      if (t.type === 'income' && inYear(t.date)) {
+        if (!c || !c.isTaxable) continue;
+        const w = walletById(t.walletId);
+        const row = { id: t.id, date: t.date, cat: c.name, icon: c.icon, color: c.color,
+          wallet: w ? w.name : '—', currency: (w && w.currency) || 'THB', amount: t.amount,
+          note: t.note || '', fxRate: t.fxRate, thb: t.thbAmount };
+        if (thbWalletIds.has(t.walletId)) { row.thb = t.amount; thb.push(row); }
+        else if (!srcTH) pending.push(row);            // โหมด remittance: รอโอนเข้าไทยก่อนถึงนับ
+        else if (t.thbAmount != null) fx.push(row);
+        else noRate.push(row);                         // ไม่มีเรต → ยังนับไม่ได้
+      } else if (!srcTH && t.type === 'transfer' && t.remit && inYear(t.date) && thbWalletIds.has(t.toWalletId)) {
+        if (!c || !c.isTaxable) continue;
+        const from = walletById(t.walletId), to = walletById(t.toWalletId);
+        remit.push({ id: t.id, date: t.date, cat: c.name, icon: c.icon, color: c.color,
+          wallet: `${from ? from.name : '—'} → ${to ? to.name : '—'}`, currency: (from && from.currency) || 'THB',
+          amount: t.amount, note: t.note || '', thb: t.toAmount != null ? t.toAmount : t.amount });
+      }
+    }
+    const byDate = (a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0);
+    [thb, fx, noRate, remit, pending].forEach((l) => l.sort(byDate));
+    return { thb, fx, noRate, remit, pending, srcTH, year: y };
+  }
+
   /* =========================================================
      PUBLIC API
      ========================================================= */
@@ -398,6 +432,7 @@
       persist(); return fi;
     },
     taxSummary,
+    taxDetail,
 
     // settings + backup
     settings: () => data.settings,

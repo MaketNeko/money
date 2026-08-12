@@ -20,6 +20,12 @@
   /* ---------- บันทึกการอัปเดต (แสดงในตั้งค่า > เกี่ยวกับ) ----------
      ทุกครั้งที่อัปเดตแอป เพิ่มรายการใหม่ไว้บนสุด */
   const CHANGELOG = [
+    { v: '0.15', date: '12 ส.ค. 2569', items: [
+      'หน้าภาษี: กดที่บรรทัดรายได้แต่ละแบบ (กระเป๋าบาท / กระเป๋าต่างสกุล / โอนเข้าไทย) เพื่อกางดูได้เลยว่ายอดนั้นมาจากรายการไหนบ้าง — เห็นวันที่ หมวดหมู่ กระเป๋า โน้ต ยอดเงิน และยอดบาทที่แปลงแล้วพร้อมเรตที่ใช้',
+      'หน้าภาษี: เพิ่มกลุ่ม "ยังไม่ถูกนับ" ให้กางดูได้ด้วย — รายการที่ยังไม่มีอัตราแลกเปลี่ยน หรือ (โหมดรายได้ต่างประเทศ) ที่ยังรอโอนเข้าไทย จะได้รู้ว่าทำไมยอดถึงไม่ตรงที่คิด',
+      'หน้าลงเงิน: เห็นเงินในบัญชีตอนลงรายการเลย — ชิปกระเป๋าทุกอันโชว์ยอดคงเหลือ และมีบรรทัดสรุป "คงเหลือ → หลังบันทึก" ที่อัปเดตสดตามจำนวนเงินที่กด (โหมดโอนแสดงทั้งกระเป๋าต้นทางและปลายทาง) ยอดติดลบขึ้นสีแดงเตือน',
+      'ยอดคงเหลือในชิปกระเป๋าแสดงในหน้าชำระหนี้และเคลียหนี้ด้วย',
+    ] },
     { v: '0.14', date: '5 ส.ค. 2569', items: [
       'แก้หลักการนับภาษีให้ตรงกฎหมาย: เพิ่มสวิตช์ "ถือว่างานทุกอย่างทำในไทย" (เปิดไว้เป็นค่าเริ่มต้น) — ตาม ม.41 วรรคหนึ่ง ถ้าเรานั่งทำงานอยู่ในไทย เงินได้ต้องเสียภาษีทันทีที่รับเงิน ไม่ว่าจะรับเข้ากระเป๋าสกุลไหนหรือยังไม่โอนเข้าไทยก็ตาม (ของเดิมนับเฉพาะตอนโอนเข้าไทย ซึ่งใช้ได้เฉพาะกรณีทำงานอยู่นอกประเทศจริง ๆ)',
       'ลงรายรับในกระเป๋าต่างสกุล: มีช่องอัตราแลกเปลี่ยน พร้อม "ดึงเรตอัตโนมัติ" ตามวันที่ของรายการ (ข้อมูล ECB) แก้ทับเองได้ — เรตจะถูกล็อกติดไปกับรายการ ไม่เปลี่ยนย้อนหลัง',
@@ -113,6 +119,7 @@
   const hist = { mode: 'month', y: now.getFullYear(), m: now.getMonth(), start: '', end: '', search: '', typeFilter: 'all', walletId: '' };
   let add = null, bill = null, catEdit = null, debtE = null, wal = null, pay = null, fxConvert = null, clearD = null;
   let catType = 'expense', taxCatOpen = false, taxDedOpen = false, changelogOpen = false, taxTab = 'summary';
+  const taxOpen = new Set();  // กลุ่มยอดในหน้าภาษีที่กางดูรายการอยู่
   const debtOpen = new Set(); // index กลุ่มคนที่กางดูรายละเอียดอยู่ในหน้าหนี้
   let debtSelMode = false;          // โหมดติ้กเลือกหลายก้อนในหน้าหนี้
   const debtSel = new Set();        // id ก้อนหนี้ที่ติ้กไว้
@@ -247,15 +254,18 @@
     const bal = S.walletBalance(w.id);
     const def = w.id === S.defaultWalletId();
     const cur = w.currency || 'THB';
-    const balStr = cur === 'THB' ? '฿' + fmt(bal) : currSymbol(cur) + fmt(bal) + ' ' + cur;
+    const balStr = money(bal, cur) + (cur === 'THB' ? '' : ' ' + cur);
     return `<div class="rowitem" style="${w.enabled === false ? 'opacity:.45' : ''}">
       <div class="avatar" style="color:${w.color}">${icon(w.icon)}</div>
       <div class="body"><div class="t">${esc(w.name)}${def ? ' <span class="badge">เริ่มต้น</span>' : ''}${cur !== 'THB' ? ` <span class="badge" style="background:var(--trust)">${cur}</span>` : ''}</div></div>
       <span class="wallet-bal num" style="color:${bal < 0 ? 'var(--expense)' : 'var(--ink)'}"> ${balStr}</span></div>`;
   }
+  // ยอดเงินพร้อมสัญลักษณ์สกุล — ติดลบให้ขึ้นเครื่องหมายหน้าสัญลักษณ์ (-฿1,820 ไม่ใช่ ฿-1,820)
+  const money = (n, cur) => (n < 0 ? '-' : '') + currSymbol(cur || 'THB') + fmt(Math.abs(n));
+  // ชิปเลือกกระเป๋า — โชว์ยอดคงเหลือติดไว้ในชิปด้วย จะได้ไม่ต้องออกไปดูหน้ากระเป๋า
   const walletChips = (sel, fn, thbOnly) => S.wallets().filter((w) => w.enabled !== false && ((w.currency || 'THB') === 'THB' || (!thbOnly && S.settings().foreignIncomeEnabled))).map((w) => {
-    const cur = w.currency || 'THB';
-    return `<span class="cchip ${w.id === sel ? 'on' : ''}" onclick="${fn}('${w.id}')">${esc(w.name)}${cur !== 'THB' ? ' ' + cur : ''}</span>`;
+    const cur = w.currency || 'THB'; const b = S.walletBalance(w.id);
+    return `<span class="cchip ${w.id === sel ? 'on' : ''}" onclick="${fn}('${w.id}')">${esc(w.name)}${cur !== 'THB' ? ' ' + cur : ''} <b class="cchip-bal${b < 0 ? ' neg' : ''}">${money(b, cur)}</b></span>`;
   }).join('');
 
   /* =========================================================
@@ -512,6 +522,29 @@
      TAX
      ========================================================= */
 
+  /* บรรทัดสรุปที่กดกางดูรายการต้นทางได้ — total เป็นยอดบาทที่เข้าฐานภาษี */
+  function taxGroupRow(key, label, total, rows, opt) {
+    const o = opt || {};
+    const open = taxOpen.has(key);
+    const head = `<div class="tax-row tap${open ? ' open' : ''}${o.muted ? ' muted' : ''}" onclick="App.toggleTaxGroup('${key}')">
+      <span>${label} <span class="badge">${rows.length}</span><span class="caret">▶</span></span>
+      <span class="num">${o.muted ? 'ไม่นับ' : '฿' + fmt(total)}</span></div>`;
+    if (!open) return head;
+    const items = rows.length ? rows.map((r) => {
+      const foreign = r.currency !== 'THB';
+      const main = foreign ? `${currSymbol(r.currency)}${fmt(r.amount)} ${r.currency}` : `฿${fmt(r.amount)}`;
+      // กลุ่ม "รอโอนเข้าไทย" ยังไม่นับไม่ว่าจะมีเรตหรือไม่ — ไม่ต้องเตือนเรื่องเรต
+      const sub = !foreign ? ''
+        : r.thb != null ? `= ฿${fmt(r.thb)}${r.fxRate ? ` @${r.fxRate}` : ''}`
+        : o.pending ? '' : 'ยังไม่มีเรต';
+      return `<div class="tax-di">
+        <span class="d">${dayLabel(r.date)}</span>
+        <span class="m">${esc(r.cat)} <i>· ${esc(r.wallet)}${r.note ? ' · ' + esc(r.note) : ''}</i></span>
+        <span class="a num">${main}${sub ? `<small>${sub}</small>` : ''}</span></div>`;
+    }).join('') : '<div class="tax-di none">ไม่มีรายการ</div>';
+    return head + `<div class="tax-detail">${items}</div>`;
+  }
+
   function renderTax() {
     const st = S.settings(); const ts = S.taxSummary(); const ded = st.taxDeductions || {};
     let html = '';
@@ -523,6 +556,7 @@
     if (st.taxEnabled && taxTab === 'guide') {
       html += taxGuideHtml();
     } else if (st.taxEnabled) {
+      const td = S.taxDetail(ts.year);
       const taxCls = ts.estimatedTax > 0 ? ' has-tax' : '';
       const taxLbl = ts.estimatedTax > 0 ? '฿' + fmt(ts.estimatedTax) : ts.netIncome <= 0 ? 'ยังไม่ถึงเกณฑ์เสียภาษี' : '฿0';
       const dedRows = [
@@ -537,12 +571,14 @@
           <div class="tax-amount num">${taxLbl}</div>
           <div class="tax-net">เงินได้สุทธิ ฿${fmt(ts.netIncome)}</div>
         </div>
-        <div class="section" style="margin-top:16px"><span>รายได้ที่ต้องเสียภาษี</span></div>
+        <div class="section" style="margin-top:16px"><span>รายได้ที่ต้องเสียภาษี</span><span style="font-size:12px;color:var(--muted)">กดดูรายการ</span></div>
         <div class="tax-rows">
-          <div class="tax-row"><span>รายได้กระเป๋าบาท</span><span class="num">฿${fmt(ts.taxableTHB)}</span></div>
-          ${ts.taxableFX > 0 ? `<div class="tax-row"><span>รายได้กระเป๋าต่างสกุล (แปลงตามเรตวันรับเงิน)</span><span class="num">฿${fmt(ts.taxableFX)}</span></div>` : ''}
-          ${ts.remitTHB > 0 ? `<div class="tax-row"><span>รายได้ต่างประเทศ (โอนเข้าไทย)</span><span class="num">฿${fmt(ts.remitTHB)}</span></div>` : ''}
+          ${taxGroupRow('thb', 'รายได้กระเป๋าบาท', ts.taxableTHB, td.thb)}
+          ${td.fx.length ? taxGroupRow('fx', 'รายได้กระเป๋าต่างสกุล (แปลงตามเรตวันรับเงิน)', ts.taxableFX, td.fx) : ''}
+          ${td.remit.length ? taxGroupRow('remit', 'รายได้ต่างประเทศ (โอนเข้าไทย)', ts.remitTHB, td.remit) : ''}
           <div class="tax-row total"><span>รายได้รวม</span><span class="num">฿${fmt(ts.totalIncome)}</span></div>
+          ${td.noRate.length ? taxGroupRow('norate', '⚠️ ยังไม่ถูกนับ — ไม่มีอัตราแลกเปลี่ยน', 0, td.noRate, { muted: true }) : ''}
+          ${td.pending.length ? taxGroupRow('pending', 'ยังไม่ถูกนับ — รอโอนเข้าไทย', 0, td.pending, { muted: true, pending: true }) : ''}
         </div>
         ${ts.missingRate > 0 ? `<div class="empty" style="text-align:left;padding:10px 12px;margin-top:10px;font-size:12.5px;line-height:1.6;background:var(--surface);border-radius:12px">
           ⚠️ มีรายรับ <b>${ts.missingRate} รายการ</b> ในกระเป๋าต่างสกุลที่ยังไม่มีอัตราแลกเปลี่ยน — ยอดข้างบนจึง<b>ต่ำกว่าความจริง</b><br>
@@ -675,7 +711,7 @@
     const rows = ws.map((w, i) => {
       const bal = S.walletBalance(w.id);
       const cur = w.currency || 'THB';
-      const balStr = cur === 'THB' ? '฿' + fmt(bal) : currSymbol(cur) + fmt(bal) + ' ' + cur;
+      const balStr = money(bal, cur) + (cur === 'THB' ? '' : ' ' + cur);
       const isFX = cur !== 'THB';
       return `<div class="cat-row" style="${w.enabled === false ? 'opacity:.5' : ''}">
         <span style="display:flex;flex-direction:column;gap:2px">
@@ -883,6 +919,41 @@
     paintFxBlock();
   }
 
+  /* ---------- ยอดเงินในกระเป๋า ณ หน้าลงเงิน ----------
+     โชว์คงเหลือปัจจุบัน → หลังบันทึกรายการนี้ (ถ้าเป็นการแก้ไข ถอนผลของรายการเดิมออกก่อน) */
+  function txEffectOn(t, wid) {
+    const amt = Number(t.amount) || 0;
+    if (t.type === 'transfer') {
+      return (t.walletId === wid ? -amt : 0) + (t.toWalletId === wid ? (t.toAmount != null ? t.toAmount : amt) : 0);
+    }
+    if (t.walletId !== wid) return 0;
+    return t.type === 'income' ? amt : -amt;
+  }
+  function balAfter(wid, delta) {
+    let b = S.walletBalance(wid);
+    if (add.id) { const old = S.transactions().find((x) => x.id === add.id); if (old) b -= txEffectOn(old, wid); }
+    return b + delta;
+  }
+  function balLineHtml() {
+    if (!add) return '<div id="balLine"></div>';
+    const amt = parseFloat(add.amount) || 0;
+    const seg = (wid, delta, label) => {
+      const w = S.wallet(wid); if (!w) return '';
+      const cur = w.currency || 'THB';
+      const now = S.walletBalance(wid), after = balAfter(wid, delta);
+      return `<span class="bal-seg"><i>${label ? esc(label) + ' ' : ''}${esc(w.name)}</i> ${money(now, cur)}${delta ? ` <em>→</em> <b class="${after < 0 ? 'neg' : ''}">${money(after, cur)}</b>` : ''}</span>`;
+    };
+    let inner;
+    if (add.type === 'transfer') {
+      const toAmt = parseFloat(add.toAmount) || amt;
+      inner = seg(add.walletId, -amt, 'จาก') + seg(add.toWalletId, toAmt, 'ไป');
+    } else {
+      inner = seg(add.walletId, add.type === 'income' ? amt : -amt, '');
+    }
+    return `<div id="balLine" class="bal-line">${inner}</div>`;
+  }
+  function paintBalLine() { const el = $('#balLine'); if (el) el.outerHTML = balLineHtml(); }
+
   function renderAdd() {
     const anim = add._opened ? '' : ' anim'; add._opened = true;
     const adv = mode() === 'advanced';
@@ -918,6 +989,7 @@
           <div class="grab" onclick="App.closeSheet()"></div>
           <div class="toggle">${seg}</div>
           <div class="amount-big"><span class="baht num">${addCurrSym}</span><span class="val num ${kindCls}" id="amtVal" ${valStyle}>${displayAmount(add.amount)}</span>${addCurrency !== 'THB' ? `<span style="font-size:13px;color:var(--muted);margin-left:4px">${addCurrency}</span>` : ''}</div>
+          ${balLineHtml()}
           ${body}
           <div class="range-row" style="margin-top:6px">
             <div class="col"><input class="input" type="date" value="${add.date}" max="${S.todayISO()}" onchange="App.setDate(this.value)"></div>
@@ -1222,7 +1294,7 @@
       if (k === 'bs') a = a.length > 1 ? a.slice(0, -1) : '0';
       else if (k === '.') { if (!a.includes('.')) a += '.'; }
       else { if (a === '0') a = k; else if (/\.\d\d$/.test(a)) return; else a += k; }
-      add.amount = a; $('#amtVal').textContent = displayAmount(a); paintFxPreview();
+      add.amount = a; $('#amtVal').textContent = displayAmount(a); paintFxPreview(); paintBalLine();
     },
     setFxRate(v) { if (!add) return; add.fxRate = v; add.fxManual = true; add.fxSource = null; paintFxPreview(); },
     fxRefetch() { if (add) { add.fxManual = false; fxAutoFill(true); } },
@@ -1424,6 +1496,7 @@
     setTaxDed(k, v) { const d = { ...(S.settings().taxDeductions || {}) }; d[k] = parseFloat(v) || 0; S.updateSettings({ taxDeductions: d }); if (current === 'tax') renderTax(); },
     toggleCatTax(id) { const c = S.category(id); if (!c || c.type !== 'income') return; S.updateCategory(id, { name: c.name, icon: c.icon, color: c.color, isTaxable: !c.isTaxable }); renderTax(); },
     toggleTaxCatSection() { taxCatOpen = !taxCatOpen; renderTax(); },
+    toggleTaxGroup(k) { taxOpen.has(k) ? taxOpen.delete(k) : taxOpen.add(k); renderTax(); },
     setTaxTab(v) { taxTab = v; renderTax(); const scr = $('#screen-tax'); if (scr) scr.scrollTop = 0; },
     openTaxDed() { taxDedOpen = true; go('settings'); },
     toggleTaxDedSection() { taxDedOpen = !taxDedOpen; renderSettings(); },
