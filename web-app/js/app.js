@@ -25,6 +25,8 @@
       'หน้าภาษี: เพิ่มกลุ่ม "ยังไม่ถูกนับ" ให้กางดูได้ด้วย — รายการที่ยังไม่มีอัตราแลกเปลี่ยน หรือ (โหมดรายได้ต่างประเทศ) ที่ยังรอโอนเข้าไทย จะได้รู้ว่าทำไมยอดถึงไม่ตรงที่คิด',
       'หน้าลงเงิน: เห็นเงินในบัญชีตอนลงรายการเลย — ชิปกระเป๋าทุกอันโชว์ยอดคงเหลือ และมีบรรทัดสรุป "คงเหลือ → หลังบันทึก" ที่อัปเดตสดตามจำนวนเงินที่กด (โหมดโอนแสดงทั้งกระเป๋าต้นทางและปลายทาง) ยอดติดลบขึ้นสีแดงเตือน',
       'ยอดคงเหลือในชิปกระเป๋าแสดงในหน้าชำระหนี้และเคลียหนี้ด้วย',
+      'หน้าประวัติ: ดูแยกกระเป๋าได้แล้วทั้งโหมดง่ายและโหมดละเอียด (เดิมมีเฉพาะโหมดละเอียด) — ย้ายแถบเลือกกระเป๋าขึ้นมาไว้ใต้ตัวเลือกเดือน พร้อมยอดคงเหลือของแต่ละกระเป๋า',
+      'พอเลือกดูกระเป๋าเดียว การ์ดสรุปเปลี่ยนเป็น "เงินเข้า / เงินออก / เปลี่ยนแปลงสุทธิ" ของกระเป๋านั้นโดยเฉพาะ — นับรวมเงินโอนเข้า-ออกและรายการหนี้ด้วย (ของเดิมนับแค่รายรับ/รายจ่าย ทำให้ตัวเลขไม่ตรงกับรายการที่เห็น) พร้อมโชว์ยอดคงเหลือปัจจุบัน กระเป๋าต่างสกุลแสดงเป็นสกุลของกระเป๋านั้น',
     ] },
     { v: '0.14', date: '5 ส.ค. 2569', items: [
       'แก้หลักการนับภาษีให้ตรงกฎหมาย: เพิ่มสวิตช์ "ถือว่างานทุกอย่างทำในไทย" (เปิดไว้เป็นค่าเริ่มต้น) — ตาม ม.41 วรรคหนึ่ง ถ้าเรานั่งทำงานอยู่ในไทย เงินได้ต้องเสียภาษีทันทีที่รับเงิน ไม่ว่าจะรับเข้ากระเป๋าสกุลไหนหรือยังไม่โอนเข้าไทยก็ตาม (ของเดิมนับเฉพาะตอนโอนเข้าไทย ซึ่งใช้ได้เฉพาะกรณีทำงานอยู่นอกประเทศจริง ๆ)',
@@ -336,6 +338,26 @@
   /* =========================================================
      HISTORY
      ========================================================= */
+  /* เงินเข้า-ออกจริงของกระเป๋าเดียวในช่วงที่ดูอยู่ — ต่างจาก S.totals() ตรงที่นับ
+     "โอนเข้า/โอนออก" และ "รายการหนี้" ด้วย เพราะเงินเข้าออกกระเป๋านั้นจริง ๆ
+     (โอนใช้ toAmount ฝั่งปลายทาง เพราะคนละสกุลกันได้) */
+  function walletFlow(list, debtMoves, wid) {
+    let inn = 0, out = 0;
+    for (const t of list) {
+      if (t.type === 'transfer') {
+        if (t.walletId === wid) out += t.amount;
+        if (t.toWalletId === wid) inn += (t.toAmount != null ? t.toAmount : t.amount);
+      } else if (t.walletId === wid) {
+        if (t.type === 'income') inn += t.amount; else out += t.amount;
+      }
+    }
+    for (const mv of debtMoves) {
+      if (mv.walletId !== wid) continue;
+      if ((mv.kind === 'iowe') === (mv.event === 'start')) inn += mv.amount; else out += mv.amount;
+    }
+    return { in: inn, out, net: inn - out };
+  }
+
   function renderHistory() {
     let rawList, label, inPeriod;
     if (hist.mode === 'month') { const ym = ymKey(hist.y, hist.m); rawList = S.txInMonth(ym); label = monthLabel(hist.y, hist.m); inPeriod = (d) => S.monthKey(d) === ym; }
@@ -382,11 +404,13 @@
       <div class="col"><div class="field-label" style="margin-top:0">ถึง</div><input class="input" type="date" id="rangeEnd" value="${hist.end}" max="${S.todayISO()}" onchange="App.histRange()"></div></div>
       <div class="wrap-chips" style="margin-top:10px"><span class="cchip" onclick="App.histPreset(7)">7 วัน</span><span class="cchip" onclick="App.histPreset(30)">30 วัน</span><span class="cchip" onclick="App.histPreset(90)">90 วัน</span><span class="cchip" onclick="App.histPreset('year')">ปีนี้</span></div>`;
 
+    // ตัวกรองกระเป๋า — ใช้ได้ทั้งโหมดง่ายและโหมดละเอียด (ยอดคงเหลือติดในชิปเลย)
     const adv = mode() === 'advanced';
-    const wallets = adv ? S.wallets().filter((w) => w.enabled !== false) : [];
-    const walChips = wallets.length > 1 ? `<div class="wrap-chips" style="margin-top:8px">
-      <span class="cchip${!hist.walletId ? ' on' : ''}" onclick="App.histWallet('')">ทั้งหมด</span>
-      ${wallets.map((w) => `<span class="cchip${hist.walletId === w.id ? ' on' : ''}" onclick="App.histWallet('${w.id}')">${esc(w.name)}</span>`).join('')}
+    const wallets = S.wallets().filter((w) => w.enabled !== false);
+    const walChips = wallets.length > 1 ? `<div class="wrap-chips" style="margin-top:10px">
+      <span class="cchip${!hist.walletId ? ' on' : ''}" onclick="App.histWallet('')">ทุกกระเป๋า</span>
+      ${wallets.map((w) => { const cur = w.currency || 'THB'; const b = S.walletBalance(w.id);
+        return `<span class="cchip${hist.walletId === w.id ? ' on' : ''}" onclick="App.histWallet('${w.id}')">${esc(w.name)}${cur !== 'THB' ? ' ' + cur : ''} <b class="cchip-bal${b < 0 ? ' neg' : ''}">${money(b, cur)}</b></span>`; }).join('')}
     </div>` : '';
 
     // รายการหนี้ที่ผูกกระเป๋าในช่วงนี้ (โหมดละเอียดเท่านั้น) — กรองด้วยกระเป๋า+ค้นหา เหมือนรายการปกติ
@@ -398,18 +422,36 @@
     }).sort((a, b) => (a.date < b.date ? 1 : -1));
     const debtSection = debtMoves.length ? `<div class="section"><span>รายการหนี้ (${debtMoves.length})</span><button class="link" onclick="App.go('debt')">จัดการ →</button></div>${debtMoves.map(debtMoveRow).join('')}` : '';
 
+    /* เลือกกระเป๋าเดียว → สรุปเป็น "เงินเข้า/เงินออก" ของกระเป๋านั้น (รวมโอน+หนี้)
+       ไม่ใช่ รายรับ/รายจ่าย รวมทุกกระเป๋าแบบปกติ ตัวเลขจะได้ตรงกับรายการที่เห็นข้างล่าง */
+    const selW = hist.walletId ? S.wallet(hist.walletId) : null;
+    let summaryHtml, donutList;
+    if (selW) {
+      const cur = selW.currency || 'THB';
+      const f = walletFlow(list, debtMoves, selW.id);
+      summaryHtml = `
+        <div class="section" style="margin-top:12px"><span>${esc(selW.name)}</span><span style="font-size:13px;color:var(--muted)">คงเหลือตอนนี้ <b class="num" style="color:var(--ink)">${money(S.walletBalance(selW.id), cur)}</b></span></div>
+        <div class="sum-grid"><div class="sum-card inc"><div class="k">เงินเข้า</div><div class="v num">${money(f.in, cur)}</div></div><div class="sum-card exp"><div class="k">เงินออก</div><div class="v num">${money(f.out, cur)}</div></div></div>
+        <div class="sum-card" style="margin-top:10px"><div class="k">เปลี่ยนแปลงสุทธิในช่วงนี้</div><div class="v num" style="color:${f.net < 0 ? 'var(--expense)' : 'var(--ink)'}">${money(f.net, cur)}</div></div>`;
+      donutList = list.filter((t) => t.type === 'expense' && t.walletId === selW.id);
+    } else {
+      summaryHtml = currencies.length ? currencies.map((c) => sumBlock(c, byCur[c])).join('')
+        : `<div class="sum-grid"><div class="sum-card inc"><div class="k">รายรับ</div><div class="v num">฿0</div></div><div class="sum-card exp"><div class="k">รายจ่าย</div><div class="v num">฿0</div></div></div>`;
+      donutList = byCur['THB'] || [];
+    }
+
     $('#screen-history').innerHTML = `
       <div class="mode-tabs"><button class="${hist.mode === 'month' ? 'on' : ''}" onclick="App.histSetMode('month')">รายเดือน</button><button class="${hist.mode === 'range' ? 'on' : ''}" onclick="App.histSetMode('range')">เลือกช่วง</button></div>
       ${hist.mode === 'month' ? monthCtrl : rangeCtrl}
-      ${currencies.length ? currencies.map((c) => sumBlock(c, byCur[c])).join('') : `<div class="sum-grid"><div class="sum-card inc"><div class="k">รายรับ</div><div class="v num">฿0</div></div><div class="sum-card exp"><div class="k">รายจ่าย</div><div class="v num">฿0</div></div></div>`}
-      ${donutCard(byCur['THB'] || [])}
+      ${walChips}
+      ${summaryHtml}
+      ${donutCard(donutList)}
       <div style="margin-top:12px"><input class="input" placeholder="ค้นหา note หรือหมวดหมู่…" value="${esc(hist.search)}" oninput="App.histSearch(this.value)"></div>
       <div class="wrap-chips" style="margin-top:8px">
         <span class="cchip${hist.typeFilter === 'all' ? ' on' : ''}" onclick="App.histType('all')">ทั้งหมด</span>
         <span class="cchip${hist.typeFilter === 'income' ? ' on' : ''}" onclick="App.histType('income')">รายรับ</span>
         <span class="cchip${hist.typeFilter === 'expense' ? ' on' : ''}" onclick="App.histType('expense')">รายจ่าย</span>
       </div>
-      ${walChips}
       <div class="section"><span>รายการ (${list.length})</span></div>
       ${txList(list.slice().sort((a, b) => (a.date < b.date ? 1 : -1)))}
       ${debtSection}`;
