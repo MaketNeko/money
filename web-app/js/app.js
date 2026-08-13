@@ -20,6 +20,9 @@
   /* ---------- บันทึกการอัปเดต (แสดงในตั้งค่า > เกี่ยวกับ) ----------
      ทุกครั้งที่อัปเดตแอป เพิ่มรายการใหม่ไว้บนสุด */
   const CHANGELOG = [
+    { v: '0.16', date: '13 ส.ค. 2569', items: [
+      'แก้ปัญหาชีตปิดเองตอนลากเลือกข้อความ — เดิมถ้าลากคลุมข้อความในกรอบแล้วปล่อยเมาส์เลยขอบออกไปข้างนอก ชีตจะปิดทันทีทั้งที่ไม่ได้ตั้งใจ ตอนนี้ต้องกดลงและปล่อยบนพื้นที่มืดนอกกรอบทั้งคู่เท่านั้นถึงจะปิด (กดปุ่ม Esc หรือปาดลงปิดยังใช้ได้เหมือนเดิม)',
+    ] },
     { v: '0.15', date: '12 ส.ค. 2569', items: [
       'หน้าภาษี: กดที่บรรทัดรายได้แต่ละแบบ (กระเป๋าบาท / กระเป๋าต่างสกุล / โอนเข้าไทย) เพื่อกางดูได้เลยว่ายอดนั้นมาจากรายการไหนบ้าง — เห็นวันที่ หมวดหมู่ กระเป๋า โน้ต ยอดเงิน และยอดบาทที่แปลงแล้วพร้อมเรตที่ใช้',
       'หน้าภาษี: เพิ่มกลุ่ม "ยังไม่ถูกนับ" ให้กางดูได้ด้วย — รายการที่ยังไม่มีอัตราแลกเปลี่ยน หรือ (โหมดรายได้ต่างประเทศ) ที่ยังรอโอนเข้าไทย จะได้รู้ว่าทำไมยอดถึงไม่ตรงที่คิด',
@@ -1026,7 +1029,7 @@
     const pad = keys.map((k) => k === 'bs' ? `<button class="key" onclick="App.key('bs')">${icon('i-bs')}</button>` : `<button class="key num" onclick="App.key('${k}')">${k}</button>`).join('');
 
     $('#overlay').innerHTML = `
-      <div class="sheet-dim${anim}" onclick="if(event.target===this)App.closeSheet()">
+      <div class="sheet-dim${anim}" onpointerdown="App.dimDown(event,this)" onpointerup="App.dimUp(event,this)">
         <div class="sheet">
           <div class="grab" onclick="App.closeSheet()"></div>
           <div class="toggle">${seg}</div>
@@ -1209,6 +1212,9 @@
   }
 
   /* ---------- overlay + toast ---------- */
+  /* กันชีตปิดเองตอนลากเลือกข้อความจากในกรอบออกไปปล่อยนอกกรอบ
+     — ต้องทั้งกดลงและปล่อยบนพื้นที่มืด (dim) เท่านั้นถึงจะปิด */
+  let dimPressed = false;
   function initSheetSwipe() {
     const sheet = $('#overlay .sheet');
     if (!sheet) return;
@@ -1244,7 +1250,7 @@
 
   function sheetWrap(inner, key) {
     const first = !openFlags[key]; openFlags[key] = true;
-    $('#overlay').innerHTML = `<div class="sheet-dim${first ? ' anim' : ''}" onclick="if(event.target===this)App.closeSheet()"><div class="sheet"><div class="grab" onclick="App.closeSheet()"></div>${inner}</div></div>`;
+    $('#overlay').innerHTML = `<div class="sheet-dim${first ? ' anim' : ''}" onpointerdown="App.dimDown(event,this)" onpointerup="App.dimUp(event,this)"><div class="sheet"><div class="grab" onclick="App.closeSheet()"></div>${inner}</div></div>`;
     initSheetSwipe();
   }
   function flashSaved() {
@@ -1581,6 +1587,8 @@
     resetData() { if (confirm('ล้างข้อมูลทั้งหมด? รายการ/บิล/หนี้จะถูกลบ เริ่มต้นใหม่หน้าว่าง (หมวดหมู่+กระเป๋าเริ่มต้นยังอยู่)')) { S.resetAll(); toast('ล้างข้อมูลแล้ว'); buildNav(); go('home'); } },
 
     closeSheet() { $('#overlay').innerHTML = ''; add = bill = catEdit = debtE = wal = pay = fxConvert = clearD = null; for (const k in openFlags) delete openFlags[k]; },
+    dimDown(e, el) { dimPressed = (e.target === el); },
+    dimUp(e, el) { const ok = dimPressed && e.target === el; dimPressed = false; if (ok) App.closeSheet(); },
     applyUpdate() { if (App._waiting) App._waiting.postMessage('skipWaiting'); $('#updateBanner').hidden = true; },
     async checkUpdate() {
       if (!('serviceWorker' in navigator) || !swReg) { toast('อุปกรณ์นี้ไม่รองรับตรวจอัปเดตอัตโนมัติ'); return; }
