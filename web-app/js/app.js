@@ -13,7 +13,8 @@
   const icon = (id, cls = '') => `<svg class="i ${cls}"><use href="#${id}"/></svg>`;
   // ปัด 2 ตำแหน่ง + || 0 กัน -0 / เศษทศนิยมจากการคูณเรต (เช่น -0.0000001 → 0)
   const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100 || 0;
-  const fmt = (n) => r2(n).toLocaleString('en-US', { maximumFractionDigits: 2 });
+  // จำนวนเต็มไม่มีทศนิยม, มีเศษสตางค์ → 2 ตำแหน่งเสมอ (฿27,001.50 ไม่ใช่ ฿27,001.5)
+  const fmt = (n) => { const v = r2(n); return v.toLocaleString('en-US', Number.isInteger(v) ? { maximumFractionDigits: 0 } : { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
   const mode = () => S.settings().mode;
 
   const MONTHS_FULL = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
@@ -22,6 +23,15 @@
   /* ---------- บันทึกการอัปเดต (แสดงในตั้งค่า > เกี่ยวกับ) ----------
      ทุกครั้งที่อัปเดตแอป เพิ่มรายการใหม่ไว้บนสุด */
   const CHANGELOG = [
+    { v: '0.18', date: '11 พ.ย. 2569', items: [
+      'หน้าตาใหม่ทั้งแอป: การ์ดขาวขอบมน ฟอนต์ Manrope + Anuphan ปุ่มหลักสีดำ/ขาว ชุดสีปกติเปลี่ยนเป็นเทา-ฟ้า (ชุดสีดวงดาวยังอยู่ ปรับให้อ่านง่ายขึ้น)',
+      'หน้าหลักใหม่: การ์ดเงินทั้งหมด + กระเป๋าต่างประเทศ (ยอด $ แยก + ปุ่มฝาก/ถอน + สรุปรับ/ถอนเดือนนี้), การ์ดบิลประจำเดือนพร้อมแถบบิลค้าง และปุ่มจ่ายแล้วในแต่ละบิล',
+      'แถบ "เดือนนี้": เงินเข้าแบ่งเป็น จ่ายแล้ว / บิลรอจ่าย / เหลือใช้ได้ พร้อมบอกว่าเฉลี่ยใช้ได้วันละเท่าไหร่ถึงสิ้นเดือน',
+      '"จ่ายไปกับอะไร" แสดงหมวดเรียงจากมากไปน้อยพร้อม % แทนวงโดนัท (หน้าหลักและหน้าประวัติ)',
+      'หน้าประวัติ: สรุป รายรับ/รายจ่าย/สุทธิ ในการ์ดเดียว และรายการจัดกลุ่มตามวันพร้อมยอดจ่ายของวัน',
+      'ปุ่ม ＋ ย้ายมาอยู่กลางเมนูล่าง (หน้าบิล = เพิ่มบิล, หน้าหนี้ = เพิ่มหนี้) ไม่ลอยทับเนื้อหาแล้ว',
+      'รายจ่ายปกติแสดงเป็นสีหมึก สีแดงใช้เฉพาะสิ่งที่ต้องระวัง (เลยกำหนด ติดลบ ใช้เกิน)',
+    ] },
     { v: '0.17', date: '11 พ.ย. 2569', items: [
       'แก้ยอดกระเป๋าขึ้น -0 หลังถอนเงินออกหมด (เช่น PayPal) — ตัดเศษทศนิยมจากการคูณเรตทิ้ง',
       'หน้าประวัติ: พิมพ์ค้นหาแล้วหน้าไม่ดีดขึ้น/คีย์บอร์ดไม่หลุดแล้ว กด Enter เพื่อปิดคีย์บอร์ด',
@@ -164,8 +174,12 @@
     return items;
   }
   function buildNav() {
-    $('#nav').innerHTML = navItems().map((it) => `<button data-nav="${it.k}">${icon(it.ic)}${it.t}</button>`).join('');
-    $('#nav').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => go(b.dataset.nav)));
+    const items = navItems().map((it) => `<button data-nav="${it.k}">${icon(it.ic)}${it.t}</button>`);
+    items.splice(Math.ceil(items.length / 2), 0, `<button class="nav-add" id="navAdd" aria-label="เพิ่ม">${icon('i-plus')}</button>`);
+    $('#nav').innerHTML = items.join('');
+    $('#nav').querySelectorAll('button[data-nav]').forEach((b) => b.addEventListener('click', () => go(b.dataset.nav)));
+    // ปุ่ม ＋ = ปุ่มหลักของหน้านั้น (ลงเงิน / เพิ่มบิล / เพิ่มหนี้), หน้าที่ไม่มีปุ่มหลัก = ลงเงิน
+    $('#navAdd').addEventListener('click', () => { const fab = $('#fab'); if (!fab.hidden && fab.onclick) fab.onclick(); else App.openAdd(); });
   }
 
   function go(name) {
@@ -203,16 +217,20 @@
   /* =========================================================
      shared bits
      ========================================================= */
-  function donutCard(list, labelText) {
+  /* "จ่ายไปกับอะไร" — หมวดเรียงจากมากไปน้อย: ไทล์สีหมวด + แถบบาง ๆ ตามสัดส่วน (อันดับ 1 สีหมึก) */
+  function catCard(list, title) {
     const bd = S.breakdown(list);
     const tot = bd.reduce((a, b) => a + b.amount, 0);
-    if (!tot) return `<div class="card"><div class="empty">ยังไม่มีรายจ่ายในช่วงนี้</div></div>`;
-    let acc = 0;
-    const stops = bd.map((b) => { const from = (acc / tot) * 100; acc += b.amount; return `${b.color} ${from}% ${(acc / tot) * 100}%`; }).join(', ');
-    const legend = bd.slice(0, 6).map((b) => `<div class="l"><span class="sw" style="background:${b.color}"></span><span class="name">${esc(b.name)}</span><span class="pct">${b.pct}%</span><span class="num">${fmt(b.amount)}</span></div>`).join('');
-    return `<div class="card"><div class="donut-row">
-      <div class="donut" style="background:conic-gradient(${stops})"><div class="mid"><div class="k">จ่าย</div><div class="v num">${fmt(tot)}</div></div></div>
-      <div class="legend"><div class="cap">${esc(labelText || 'รายจ่ายตามหมวด')}</div>${legend}</div></div></div>`;
+    const head = `<div class="card-h"><h2>${esc(title || 'จ่ายไปกับอะไร')}</h2>${tot ? `<span class="muted-sm num">รวม ${money(tot)}</span>` : ''}</div>`;
+    if (!tot) return `<div class="card o4">${head}<div class="empty-box">ยังไม่มีรายจ่ายในช่วงนี้</div></div>`;
+    const max = bd[0].amount;
+    const rows = bd.slice(0, 6).map((b, i) => `<div class="cat-rank">
+      <div class="avatar" style="color:${b.color}">${icon(b.icon)}</div>
+      <div class="cr-body"><div class="cr-top"><span>${esc(b.name)}</span><span class="muted-sm num">${(b.amount / tot * 100).toFixed(1)}%</span></div>
+        <div class="cr-bar${i === 0 ? ' top' : ''}" style="width:${(b.amount / max * 100).toFixed(1)}%"></div></div>
+      <div class="amt num">${money(b.amount)}</div></div>`).join('');
+    const more = bd.length > 6 ? `<div class="muted-sm" style="margin-top:6px">และอีก ${bd.length - 6} หมวด</div>` : '';
+    return `<div class="card o4">${head}${rows}${more}</div>`;
   }
 
   function txRow(t) {
@@ -224,20 +242,32 @@
         ? `${currSymbol(fromCur)}${fmt(t.amount)} → ${currSymbol(toCur)}${fmt(t.toAmount)}`
         : `${currSymbol(fromCur)}${fmt(t.amount)}`;
       return `<div class="rowitem tap" onclick="App.openAdd('${t.id}')">
-        <div class="avatar" style="color:var(--trust)">${icon('i-transfer')}</div>
+        <div class="avatar" style="color:var(--muted)">${icon('i-transfer')}</div>
         <div class="body"><div class="t">${t.remit ? 'โอนเข้าไทย' : 'โอนเงิน'}</div><div class="s">${esc(from ? from.name : '?')} → ${esc(to ? to.name : '?')} · ${dayLabel(t.date)}</div></div>
         <div class="amt" style="color:var(--muted)"><span class="num">${amtLabel}</span></div></div>`;
     }
     const c = S.category(t.categoryId);
     const w = S.wallet(t.walletId);
-    const color = t.type === 'income' ? 'var(--income)' : 'var(--expense)';
+    const color = c ? c.color : 'var(--muted)';
+    const cur = (w && w.currency) || 'THB';
     const sub = `${esc(c ? c.name : '')} · ${dayLabel(t.date)}${mode() === 'advanced' && w ? ' · ' + esc(w.name) : ''}`;
     return `<div class="rowitem tap" onclick="App.openAdd('${t.id}')">
       <div class="avatar" style="color:${color}">${icon(c ? c.icon : 'i-save')}</div>
       <div class="body"><div class="t">${esc(t.note || (c ? c.name : ''))}</div><div class="s">${sub}</div></div>
-      <div class="amt ${t.type === 'income' ? 'inc' : 'exp'}">${icon(t.type === 'income' ? 'i-up' : 'i-down', 'sm')}<span class="num">${fmt(t.amount)}</span></div></div>`;
+      <div class="amt ${t.type === 'income' ? 'inc' : 'exp'}"><span class="num">${t.type === 'income' ? '+' : ''}${money(t.amount, cur)}</span></div></div>`;
   }
-  const txList = (list) => list.length ? list.map(txRow).join('') : `<div class="empty">ยังไม่มีรายการ</div>`;
+  const txList = (list) => list.length ? list.map(txRow).join('') : `<div class="empty-box">ยังไม่มีรายการ</div>`;
+  // ประวัติ: จัดกลุ่มตามวัน พร้อมยอดจ่ายของวันนั้น (เฉพาะบาท)
+  function txListByDay(list) {
+    if (!list.length) return `<div class="empty-box">ไม่มีรายการในช่วงนี้</div>`;
+    const days = {};
+    list.slice().sort((a, b) => (a.date < b.date ? 1 : -1)).forEach((t) => (days[t.date] = days[t.date] || []).push(t));
+    return Object.entries(days).map(([d, ts]) => {
+      const out = ts.filter((t) => t.type === 'expense' && ((S.wallet(t.walletId) || {}).currency || 'THB') === 'THB').reduce((a, t) => a + t.amount, 0);
+      return `<div class="day-h"><span>${dayLabel(d)}</span><span class="num">${out ? 'จ่าย ' + money(out) : ''}</span></div>${ts.map(txRow).join('')}`;
+    }).join('');
+  }
+  const fmtFixed = (n) => r2(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   /* ---------- debt movements (แถวเสมือน: หนี้ที่ผูกกระเป๋า → โชว์ในประวัติ) ----------
      ไม่ใช่ transaction จริง (ยอดกระเป๋าคิดจาก debt โดยตรงอยู่แล้ว) แสดงผลอย่างเดียว ไม่นับรวมในสรุปรายรับ/จ่าย */
@@ -266,19 +296,9 @@
     return `<div class="rowitem tap" onclick="App.openDebt('${mv.debtId}')">
       <div class="avatar" style="color:${col}">${icon('i-users')}</div>
       <div class="body"><div class="t">${title}</div><div class="s">${sub}</div></div>
-      <div class="amt ${moneyIn ? 'inc' : 'exp'}">${icon(moneyIn ? 'i-up' : 'i-down', 'sm')}<span class="num">${fmt(mv.amount)}</span></div></div>`;
+      <div class="amt ${moneyIn ? 'inc' : 'exp'}"><span class="num">${moneyIn ? '+' : '−'}${money(mv.amount)}</span></div></div>`;
   }
 
-  function walletRow(w) {
-    const bal = S.walletBalance(w.id);
-    const def = w.id === S.defaultWalletId();
-    const cur = w.currency || 'THB';
-    const balStr = money(bal, cur) + (cur === 'THB' ? '' : ' ' + cur);
-    return `<div class="rowitem" style="${w.enabled === false ? 'opacity:.45' : ''}">
-      <div class="avatar" style="color:${w.color}">${icon(w.icon)}</div>
-      <div class="body"><div class="t">${esc(w.name)}${def ? ' <span class="badge">เริ่มต้น</span>' : ''}${cur !== 'THB' ? ` <span class="badge" style="background:var(--trust)">${cur}</span>` : ''}</div></div>
-      <span class="wallet-bal num" style="color:${bal < 0 ? 'var(--expense)' : 'var(--ink)'}"> ${balStr}</span></div>`;
-  }
   // ยอดเงินพร้อมสัญลักษณ์สกุล — ติดลบให้ขึ้นเครื่องหมายหน้าสัญลักษณ์ (-฿1,820 ไม่ใช่ ฿-1,820)
   const money = (n, cur) => (r2(n) < 0 ? '-' : '') + currSymbol(cur || 'THB') + fmt(Math.abs(n));
   // ชิปเลือกกระเป๋า — โชว์ยอดคงเหลือติดไว้ในชิปด้วย จะได้ไม่ต้องออกไปดูหน้ากระเป๋า
@@ -290,73 +310,118 @@
   /* =========================================================
      HOME
      ========================================================= */
+  /* หน้าหลัก (v0.18) — คำถามของหน้า: "เดือนนี้เหลือใช้ได้อีกเท่าไหร่ และมีบิลต้องจ่ายไหม"
+     มือถือ: 1 คอลัมน์ เรียงตาม .o1… (บิลค้างขึ้นก่อน) · จอกว้าง: ซ้าย = เงิน/เดือนนี้/ล่าสุด, ขวา = บิล/หนี้/หมวด */
   function renderHome() {
     const adv = mode() === 'advanced';
     const ym = ymKey(now.getFullYear(), now.getMonth());
-    // นับเฉพาะกระเป๋าบาท — ไม่งั้น $ จะถูกบวกเป็น ฿ (กระเป๋าต่างสกุลดูแยกในหน้าประวัติ)
+    // นับเฉพาะกระเป๋าบาท — ไม่งั้น $ จะถูกบวกเป็น ฿ (กระเป๋าต่างสกุลมีบล็อกของตัวเอง)
     const isTHB = (x) => { const w = S.wallet(x.walletId); return !w || (w.currency || 'THB') === 'THB'; };
     const list = S.txInMonth(ym).filter(isTHB); const t = S.totals(list);
-    const up = S.upcomingBills();
-    const recent = S.transactions().filter((x) => S.monthKey(x.date) === ym).slice(0, 6); // ล่าสุดโชว์ทุกสกุล (แต่ละแถวมีสัญลักษณ์สกุลของมัน)
+    const recent = S.transactions().filter((x) => S.monthKey(x.date) === ym).slice(0, 5);
+
+    // ----- เดือนนี้: เงินเข้า = จ่ายแล้ว + บิลรอจ่าย + เหลือใช้ได้ -----
+    const bills = S.billsWithStatus().filter((b) => b.enabled);
+    const unpaid = bills.filter((b) => !b.paid);
+    const dueSum = unpaid.reduce((a, b) => a + (b.variable ? 0 : (b.amount || 0)), 0);
+    const leftover = r2(t.income - t.expense - dueSum);
+    const dim = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const daysRemain = dim - new Date().getDate() + 1;
+    const pend = pendingBills().sort((a, b) => a.daysLeft - b.daysLeft);
+    const dueTxt = (b) => b.daysLeft < 0 ? `เลยกำหนด ${-b.daysLeft} วัน` : b.daysLeft === 0 ? 'ครบวันนี้' : `อีก ${b.daysLeft} วัน`;
+
+    // บรรทัดใต้หัวข้อ: เรื่องที่ต้องรู้ก่อน (บิลที่เลยกำหนด/ใกล้สุด) + เหลือใช้ได้
+    const worst = pend[0];
+    const finding = `<p class="finding">${worst ? `<b>${esc(worst.name)}${worst.variable ? '' : ' ' + money(worst.amount)} ${dueTxt(worst)}</b> · ` : ''}${t.income || dueSum ? `เหลือใช้ได้ถึงสิ้นเดือน <span class="num">${money(leftover)}</span>` : 'ยังไม่มีรายรับเดือนนี้'}</p>`;
+
+    // ----- การ์ดเงิน -----
     const heroVal = adv ? S.totalBalance() : t.balance;
-
-    const upHtml = up.map((b) => {
-      const s = b.daysLeft < 0 ? `เลยกำหนด ${-b.daysLeft} วัน` : b.daysLeft === 0 ? 'ครบวันนี้' : `อีก ${b.daysLeft} วัน`;
-      const cls = b.daysLeft <= 1 ? 's-warn' : 's-mut';
-      const amt = b.variable ? 'ผันแปร' : '฿' + fmt(b.amount);
-      return `<div class="bill"><span style="color:var(--expense)">${icon('i-bell')}</span>
-        <div class="info"><div class="t">${esc(b.name)}</div><div class="s ${cls}">ครบวันที่ ${b.dueDay} · ${s}</div></div>
-        <span class="num" style="margin-right:6px">${amt}</span>
-        <button class="btn-pay" onclick="event.stopPropagation();App.payBill('${b.id}','${b.ym}')">จ่ายแล้ว</button></div>`;
-    }).join('');
-
-    let walletsSection = '';
+    const [hi, hd] = fmtFixed(Math.abs(heroVal)).split('.');
+    let walletRows = '', fxBlock = '';
     if (adv) {
       const thbWallets = S.wallets().filter((w) => (w.currency || 'THB') === 'THB' && w.enabled !== false);
+      walletRows = thbWallets.map((w) => { const b = S.walletBalance(w.id);
+        return `<div class="rowitem"><div class="avatar" style="color:${w.color}">${icon(w.icon)}</div>
+          <div class="body"><div class="t">${esc(w.name)}${w.id === S.defaultWalletId() ? ' <span class="badge">เริ่มต้น</span>' : ''}</div></div>
+          <span class="amt num${b < 0 ? ' neg' : b === 0 ? ' zero' : ''}">${money(b)}</span></div>`; }).join('');
       const fxWallets = S.settings().foreignIncomeEnabled ? S.wallets().filter((w) => (w.currency || 'THB') !== 'THB' && w.enabled !== false) : [];
-      walletsSection = `<div class="section"><span>กระเป๋าเงิน</span><button class="link" onclick="App.openTransfer()">${icon('i-transfer', 'sm')} โอนเงิน</button></div>${thbWallets.map(walletRow).join('')}`;
-      if (fxWallets.length) walletsSection += `<div class="section"><span>กระเป๋าต่างประเทศ</span><button class="link" onclick="App.go('wallets')">จัดการ →</button></div>${fxWallets.map((w) => {
-        const bal = S.walletBalance(w.id); const cur = w.currency;
-        return `<div class="rowitem tap" onclick="App.openFXConvert('${w.id}')">
-          <div class="avatar" style="color:${w.color}">${icon(w.icon)}</div>
-          <div class="body"><div class="t">${esc(w.name)} <span class="badge" style="background:var(--trust)">${cur}</span></div>
-          <div class="s">กดเพื่อ ฝาก/ถอน แปลงสกุล</div></div>
-          <span class="wallet-bal num" style="color:${bal < 0 ? 'var(--expense)' : 'var(--ink)'}"> ${money(bal, cur)} ${cur}</span></div>`;
-      }).join('')}`;
+      if (fxWallets.length) {
+        const ids = new Set(fxWallets.map((w) => w.id));
+        const monthTx = S.txInMonth(ym);
+        // สรุปเดือนนี้แยกสกุล: รับเข้า / ถอนเข้าไทยแล้ว (ได้กี่บาท)
+        const byCur = {};
+        for (const x of monthTx) {
+          const w = S.wallet(x.walletId); if (!w || !ids.has(w.id)) continue; const c = w.currency;
+          const g = byCur[c] = byCur[c] || { in: 0, out: 0, thb: 0 };
+          if (x.type === 'income') g.in += x.amount;
+          if (x.type === 'transfer') { const to = S.wallet(x.toWalletId); if (to && (to.currency || 'THB') === 'THB') { g.out += x.amount; g.thb += (x.toAmount != null ? x.toAmount : 0); } }
+        }
+        const cap = Object.entries(byCur).filter(([, g]) => g.in || g.out).map(([c, g]) =>
+          `เดือนนี้รับ <b class="num">${money(g.in, c)}</b>${g.out ? ` · ถอนเข้าไทย <b class="num">${money(g.out, c)}</b> ได้ <b class="num">${money(g.thb)}</b>` : ''}`).join('<br>');
+        fxBlock = `<div class="fx-block"><div class="fx-h"><span>กระเป๋าต่างประเทศ</span><button class="link" onclick="App.go('wallets')">จัดการ</button></div>
+          ${fxWallets.map((w) => { const b = S.walletBalance(w.id); const c = w.currency;
+            return `<div class="rowitem"><div class="avatar" style="color:${w.color}">${icon(w.icon)}</div>
+              <div class="body"><div class="t">${esc(w.name)} <span class="badge">${c}</span></div><div class="s">ไม่รวมในยอดบาท</div></div>
+              <span class="amt num${b === 0 ? ' zero' : ''}">${money(b, c)}</span>
+              <button class="btn-pay" onclick="App.openFXConvert('${w.id}')">ฝาก/ถอน</button></div>`; }).join('')}
+          ${cap ? `<p class="cap">${cap}</p>` : ''}</div>`;
+      }
     }
+    const moneyCard = `<div class="card o1">
+      <div class="card-h"><span class="muted-sm">${adv ? 'เงินทั้งหมด (บาท)' : 'คงเหลือเดือนนี้'}</span>${adv ? `<button class="link" onclick="App.openTransfer()">${icon('i-transfer', 'sm')} โอนเงิน</button>` : ''}</div>
+      <div class="hero-amount"><span class="val num${heroVal < 0 ? ' neg' : ''}">${heroVal < 0 ? '−' : ''}฿${hi}${hd !== '00' ? `<span class="dec">.${hd}</span>` : ''}</span></div>
+      ${adv ? walletRows + fxBlock : `<div class="pills"><div class="pill">รับ <span class="num">${money(t.income)}</span></div><div class="pill">จ่าย <span class="num">${money(t.expense)}</span></div></div>`}
+    </div>`;
 
-    let debtSection = '';
+    // ----- แถบ "เดือนนี้" -----
+    const scale = Math.max(t.income, t.expense + dueSum, 1);
+    const pct = (n) => (Math.max(0, n) / scale * 100).toFixed(2) + '%';
+    const monthCard = `<div class="card o3">
+      <div class="card-h"><h2>เดือนนี้</h2><span class="muted-sm">1–${dim} ${MONTHS_SHORT[now.getMonth()]} · เหลือ ${daysRemain} วัน</span></div>
+      ${t.income || t.expense || dueSum ? `<div class="plan" role="img" aria-label="เงินเข้า ${money(t.income)} จ่ายแล้ว ${money(t.expense)} บิลรอจ่าย ${money(dueSum)} เหลือ ${money(leftover)}">
+          <i class="spent" style="width:${pct(t.expense)}"></i><i class="due" style="width:${pct(dueSum)}"></i></div>
+        <div class="plan-legend">
+          <div><span class="dot spent"></span>จ่ายแล้ว<b class="num">${money(t.expense)}</b></div>
+          <div><span class="dot due"></span>บิลรอจ่าย<b class="num">${money(dueSum)}</b></div>
+          <div><span class="dot left"></span>เหลือใช้ได้<b class="num${leftover < 0 ? ' neg' : ''}">${money(leftover)}</b></div></div>
+        <p class="cap">จากเงินเข้าเดือนนี้ <b class="num">${money(t.income)}</b>${leftover > 0 ? ` · เฉลี่ยใช้ได้วันละ <b class="num">${money(leftover / daysRemain)}</b> ถึงสิ้นเดือน` : leftover < 0 ? ` · <b class="neg">ใช้เกินเงินเข้าไปแล้ว ${money(-leftover)}</b>` : ''}</p>`
+      : '<div class="empty-box">ยังไม่มีรายการเดือนนี้ — กด ＋ เพื่อลงเงิน</div>'}
+    </div>`;
+
+    // ----- บิลประจำเดือน (แถบบิลค้าง = การเตือนในแอป) -----
+    const billOrder = bills.slice().sort((a, b) => (a.paid - b.paid) || (a.daysLeft - b.daysLeft));
+    const billTag = (b) => b.paid ? '<span class="tag ok">จ่ายแล้ว</span>'
+      : b.daysLeft < 0 ? `<span class="tag neg">${dueTxt(b)}</span>`
+      : pend.some((x) => x.id === b.id) ? `<span class="tag warn">${dueTxt(b)}</span>` : `<span class="muted-sm">${dueTxt(b)}</span>`;
+    const billsCard = bills.length ? `<div class="card o2">
+      <div class="card-h"><h2>บิลประจำเดือน</h2><button class="link" onclick="App.go('bills')">ดูทั้งหมด</button></div>
+      ${pend.length ? `<div class="notice">${icon('i-bell', 'sm')}<span>มีบิลค้าง ${pend.length} รายการ${pend.some((b) => !b.variable) ? ` รวม <b class="num">${money(pend.reduce((a, b) => a + (b.variable ? 0 : b.amount || 0), 0))}</b>` : ''}</span></div>` : ''}
+      ${billOrder.slice(0, 5).map((b) => { const c = S.category(b.categoryId);
+        return `<div class="rowitem bill-row"><div class="avatar" style="color:${c ? c.color : 'var(--muted)'}">${icon(c ? c.icon : 'i-receipt')}</div>
+          <div class="body"><div class="t">${esc(b.name)}</div><div class="s">ทุกวันที่ ${b.dueDay}</div><div class="s">${billTag(b)}</div></div>
+          <span class="amt num">${b.variable ? '<span class="muted-sm">ผันแปร</span>' : money(b.amount)}</span>
+          ${b.paid ? '<span class="pay-slot"></span>' : `<button class="btn-pay pay-slot" onclick="App.payBill('${b.id}','${b.ym}')">จ่ายแล้ว</button>`}</div>`; }).join('')}
+      ${billOrder.length > 5 ? `<div class="muted-sm" style="margin-top:6px">และอีก ${billOrder.length - 5} บิล</div>` : ''}
+    </div>` : '';
+
+    // ----- หนี้ (โหมดละเอียด) -----
+    let debtCard = '';
     if (adv) { const ds = S.debtSummary(); if (ds.iowe || ds.owed) {
       const net = ds.net;
-      const netCol = net > 0 ? 'var(--income)' : net < 0 ? 'var(--expense)' : 'var(--muted)';
-      const netTxt = net > 0 ? 'คนติดเราสุทธิ' : net < 0 ? 'เราเป็นหนี้สุทธิ' : 'สมดุล';
-      debtSection = `<div class="section"><span>หนี้</span><button class="link" onclick="App.go('debt')">ดูทั้งหมด →</button></div>
-      <div class="card" style="margin-top:8px;cursor:pointer" onclick="App.go('debt')">
-        <div class="rowitem" style="padding:2px 0"><div class="body"><div class="s" style="color:var(--muted);font-size:12px">ยอดสุทธิ</div>
-        <div class="num" style="font-size:22px;font-weight:700;color:${netCol}">฿${fmt(Math.abs(net))}</div></div>
-        <span class="badge" style="background:${netCol};color:#fff;align-self:center">${netTxt}</span></div>
-        <div class="sum-grid" style="margin-top:10px"><div class="sum-card exp"><div class="k">เราติดหนี้</div><div class="v num">${fmt(ds.iowe)}</div></div><div class="sum-card inc"><div class="k">คนติดเรา</div><div class="v num">${fmt(ds.owed)}</div></div></div></div>`;
+      debtCard = `<div class="card o5 tap" onclick="App.go('debt')">
+        <div class="card-h"><h2>หนี้</h2><button class="link">ดูทั้งหมด</button></div>
+        <div class="split3">
+          <div>สุทธิ<b class="num${net < 0 ? ' neg' : ''}">${net < 0 ? '−' : ''}${money(Math.abs(net))}</b><span class="muted-sm">${net > 0 ? 'คนติดเรามากกว่า' : net < 0 ? 'เราติดหนี้มากกว่า' : 'สมดุล'}</span></div>
+          <div>เราติดหนี้<b class="num">${money(ds.iowe)}</b></div>
+          <div>คนติดเรา<b class="num">${money(ds.owed)}</b></div></div></div>`;
     } }
 
-    // .cols/.col: มือถือ = display:contents (เหมือนไม่มีตัวห่อ), จอ ≥900px = แบ่ง 2 คอลัมน์
-    const pend = pendingBills();
-    const pendHtml = pend.length ? `<button class="card" onclick="App.go('bills')" style="display:flex;align-items:center;gap:10px;width:100%;margin-top:12px;text-align:left;cursor:pointer;border:1px solid var(--expense);color:var(--ink);font:inherit">
-        <span style="color:var(--expense)">${icon('i-bell')}</span>
-        <div style="flex:1"><div style="font-weight:700">มีบิลประจำเดือนค้าง ${pend.length} รายการ</div>
-        <div style="font-size:12px;color:var(--muted)">${esc(pend.slice(0, 3).map((b) => b.name).join(', '))}${pend.length > 3 ? ' …' : ''}</div></div>${icon('i-chev', 'sm')}</button>` : '';
-    $('#screen-home').innerHTML = `<div class="cols"><div class="col">
-      ${pendHtml}
-      <div class="hero-label">${adv ? 'เงินทั้งหมด' : 'คงเหลือเดือนนี้'}</div>
-      <div class="hero-amount"><span class="baht num">฿</span><span class="val num ${heroVal < 0 ? 'neg' : ''}">${fmt(heroVal)}</span></div>
-      <div class="pills"><div class="pill inc">${icon('i-up', 'sm')} รับ <span class="num">${fmt(t.income)}</span></div>
-        <div class="pill exp">${icon('i-down', 'sm')} จ่าย <span class="num">${fmt(t.expense)}</span></div></div>
-      ${walletsSection}
-      ${donutCard(list)}
+    const recentCard = `<div class="card o6"><div class="card-h"><h2>รายการล่าสุด</h2><button class="link" onclick="App.go('history')">ดูประวัติ</button></div>${txList(recent)}</div>`;
+
+    $('#screen-home').innerHTML = `${finding}<div class="cols"><div class="col">
+      ${moneyCard}${monthCard}${recentCard}
     </div><div class="col">
-      ${up.length ? `<div class="section"><span>บิลใกล้ครบกำหนด</span><button class="link" onclick="App.go('bills')">ดูทั้งหมด</button></div>${upHtml}` : ''}
-      ${debtSection}
-      <div class="section"><span>รายการล่าสุด</span><button class="link" onclick="App.go('history')">ดูประวัติ</button></div>
-      ${txList(recent)}
+      ${billsCard}${debtCard}${catCard(list)}
     </div></div>`;
   }
 
@@ -414,11 +479,11 @@
     const sumBlock = (cur, txs) => {
       const t = S.totals(txs);
       const sym = currSymbol(cur);
-      const fmtC = (n) => `${sym}${fmt(n)}`;
+      const fmtC = (n) => money(n, cur);
       return `
         ${multiCur ? `<div class="section" style="margin-top:12px"><span>${cur === 'THB' ? '฿ บาท' : `${sym} ${cur}`}</span></div>` : ''}
-        <div class="sum-grid"><div class="sum-card inc"><div class="k">รายรับ</div><div class="v num">${fmtC(t.income)}</div></div><div class="sum-card exp"><div class="k">รายจ่าย</div><div class="v num">${fmtC(t.expense)}</div></div></div>
-        <div class="sum-card" style="margin-top:10px"><div class="k">คงเหลือสุทธิ</div><div class="v num" style="color:${t.balance < 0 ? 'var(--expense)' : 'var(--ink)'}">${fmtC(t.balance)}</div></div>`;
+        <div class="sum-grid"><div class="sum-card inc"><div class="k">รายรับ</div><div class="v num">${fmtC(t.income)}</div></div><div class="sum-card exp"><div class="k">รายจ่าย</div><div class="v num">${fmtC(t.expense)}</div></div>
+        <div class="sum-card"><div class="k">สุทธิ</div><div class="v num" style="color:${t.balance < 0 ? 'var(--expense)' : 'var(--ink)'}">${fmtC(t.balance)}</div></div></div>`;
     };
 
     const atCurrent = hist.y === now.getFullYear() && hist.m === now.getMonth();
@@ -456,8 +521,8 @@
       const f = walletFlow(list, debtMoves, selW.id);
       summaryHtml = `
         <div class="section" style="margin-top:12px"><span>${esc(selW.name)}</span><span style="font-size:13px;color:var(--muted)">คงเหลือตอนนี้ <b class="num" style="color:var(--ink)">${money(S.walletBalance(selW.id), cur)}</b></span></div>
-        <div class="sum-grid"><div class="sum-card inc"><div class="k">เงินเข้า</div><div class="v num">${money(f.in, cur)}</div></div><div class="sum-card exp"><div class="k">เงินออก</div><div class="v num">${money(f.out, cur)}</div></div></div>
-        <div class="sum-card" style="margin-top:10px"><div class="k">เปลี่ยนแปลงสุทธิในช่วงนี้</div><div class="v num" style="color:${f.net < 0 ? 'var(--expense)' : 'var(--ink)'}">${money(f.net, cur)}</div></div>`;
+        <div class="sum-grid"><div class="sum-card inc"><div class="k">เงินเข้า</div><div class="v num">${money(f.in, cur)}</div></div><div class="sum-card exp"><div class="k">เงินออก</div><div class="v num">${money(f.out, cur)}</div></div>
+        <div class="sum-card"><div class="k">สุทธิช่วงนี้</div><div class="v num" style="color:${f.net < 0 ? 'var(--expense)' : 'var(--ink)'}">${money(f.net, cur)}</div></div></div>`;
       donutList = list.filter((t) => t.type === 'expense' && t.walletId === selW.id);
     } else {
       summaryHtml = currencies.length ? currencies.map((c) => sumBlock(c, byCur[c])).join('')
@@ -470,15 +535,14 @@
       ${hist.mode === 'month' ? monthCtrl : rangeCtrl}
       ${walChips}
       ${summaryHtml}
-      ${donutCard(donutList)}
+      ${catCard(donutList, 'จ่ายไปกับอะไร')}
       <div style="margin-top:12px"><input class="input" id="histSearch" enterkeyhint="search" placeholder="ค้นหา note หรือหมวดหมู่…" value="${esc(hist.search)}" oninput="App.histSearch(this.value)" onkeydown="if(event.key==='Enter')this.blur()"></div>
       <div class="wrap-chips" style="margin-top:8px">
         <span class="cchip${hist.typeFilter === 'all' ? ' on' : ''}" onclick="App.histType('all')">ทั้งหมด</span>
         <span class="cchip${hist.typeFilter === 'income' ? ' on' : ''}" onclick="App.histType('income')">รายรับ</span>
         <span class="cchip${hist.typeFilter === 'expense' ? ' on' : ''}" onclick="App.histType('expense')">รายจ่าย</span>
       </div>
-      <div class="section"><span>รายการ (${list.length})</span></div>
-      ${txList(list.slice().sort((a, b) => (a.date < b.date ? 1 : -1)))}
+      <div class="card"><div class="card-h"><h2>รายการ</h2><span class="muted-sm num">${list.length} รายการ</span></div>${txListByDay(list)}</div>
       ${debtSection}`;
   }
 
@@ -1304,7 +1368,7 @@
 
   // สีของ status bar (meta theme-color) ต่อ [ชุดสี][โหมด]
   const THEME_COLORS = {
-    default: { light: '#FBF6EE', dark: '#0E1613' },
+    default: { light: '#f3f5f7', dark: '#000000' },
     star: { light: '#EAF2FB', dark: '#0B1730' },
   };
   function applyTheme(pref) {
