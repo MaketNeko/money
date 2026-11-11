@@ -149,7 +149,7 @@
         b += (d.kind === 'iowe' ? -p.amount : p.amount);
       }
     }
-    return b;
+    return Math.round(b * 100) / 100 || 0; // ตัดเศษ float (ถอนหมดแล้วเหลือ -0.0000001 → 0)
   }
   function totalBalance() { return data.wallets.filter((w) => (w.currency || 'THB') === 'THB').reduce((a, w) => a + walletBalance(w.id), 0); }
 
@@ -242,11 +242,42 @@
     const totalIncome = taxableTHB + taxableFX + remitTHB;
     const expenseDeduction = Math.min(totalIncome * 0.5, 100000);
     const personalDeduction = 60000;
-    // รวมทุกช่องที่กรอก (ช่องใหม่ ๆ นับอัตโนมัติ) — donationEdu นับ 2 เท่าตามกฎบริจาคการศึกษา/รพ.รัฐ
-    const otherDeductions = Object.entries(ded).reduce((s, [k, v]) => s + (Number(v) || 0) * (k === 'donationEdu' ? 2 : 1), 0);
+    const applied = capDeductions(ded, totalIncome, totalIncome - expenseDeduction - personalDeduction);
+    const otherDeductions = Object.values(applied).reduce((s, v) => s + v, 0);
     const totalDeductions = expenseDeduction + personalDeduction + otherDeductions;
     const netIncome = Math.max(0, totalIncome - totalDeductions);
-    return { taxableTHB, taxableFX, remitTHB, missingRate, srcTH, totalIncome, expenseDeduction, personalDeduction, otherDeductions, totalDeductions, netIncome, estimatedTax: calcPIT(netIncome), year: y };
+    return { taxableTHB, taxableFX, remitTHB, missingRate, srcTH, totalIncome, expenseDeduction, personalDeduction, otherDeductions, dedApplied: applied, totalDeductions, netIncome, estimatedTax: calcPIT(netIncome), year: y };
+  }
+
+  /* ยอดลดหย่อนที่ "หักได้จริง" ต่อช่อง — ตัดตามเพดานกฎปีภาษี 2569 (ตรงกับคำอธิบายใน DED_FIELDS)
+     income = เงินได้พึงประเมินรวม, afterBase = หลังหักค่าใช้จ่าย+ลดหย่อนส่วนตัว
+     ช่องที่เพดานขึ้นกับจำนวนคน (บุตร/พ่อแม่/ผู้พิการ) หรือประกาศรายปี (มาตรการรัฐ) ใช้ตามที่กรอก
+     ponytail: พ่อแม่ตัดที่ 60k (2 คน) — ถ้าจะนับพ่อแม่คู่สมรสด้วยต้องแยกช่อง */
+  function capDeductions(ded, income, afterBase) {
+    const v = (k) => Math.max(0, Number(ded[k]) || 0);
+    const out = {};
+    for (const k of Object.keys(ded)) out[k] = v(k);
+    const cap = (k, max) => { if (k in out) out[k] = Math.min(out[k], Math.max(0, max)); };
+    cap('socialSecurity', 10500);
+    cap('spouse', 60000);
+    cap('parents', 60000);
+    cap('maternity', 60000);
+    cap('lifeInsurance', 100000);
+    cap('healthParents', 15000);
+    cap('homeLoan', 100000);
+    cap('thaiEsg', Math.min(income * 0.3, 300000));
+    cap('pensionInsurance', Math.min(income * 0.15, 200000));
+    cap('rmf', income * 0.3);
+    // กลุ่มเกษียณ (บำนาญ + RMF/PVD/กบข.) รวมกันไม่เกิน 500k — ตัดจาก RMF ก่อน
+    const retire = (out.pensionInsurance || 0) + (out.rmf || 0);
+    if (retire > 500000 && 'rmf' in out) out.rmf = Math.max(0, out.rmf - (retire - 500000));
+    // บริจาค: หักทีหลังสุด ไม่เกิน 10% ของเงินได้หลังหักค่าใช้จ่ายและลดหย่อนอื่นทั้งหมด
+    // (บริจาคการศึกษา นับ 2 เท่า แต่รวมแล้วยังอยู่ในเพดาน 10% เดียวกัน)
+    if ('donationEdu' in out) out.donationEdu *= 2;
+    const before = Object.entries(out).filter(([k]) => k !== 'donation' && k !== 'donationEdu').reduce((s, [, x]) => s + x, 0);
+    let room = Math.max(0, (afterBase - before) * 0.1);
+    for (const k of ['donationEdu', 'donation']) if (k in out) { out[k] = Math.min(out[k], room); room -= out[k]; }
+    return out;
   }
 
   /* รายละเอียดว่ายอดในหน้าภาษีมาจากรายการไหนบ้าง — ใช้ตรรกะชุดเดียวกับ taxSummary()
@@ -374,11 +405,14 @@
     toggleBillPaid(id, ym) {
       const b = data.bills.find((x) => x.id === id); if (!b) return;
       b.paidMonths = b.paidMonths || [];
+      b.paidTx = b.paidTx || {}; // ym → id รายจ่ายที่สร้างอัตโนมัติ (ไว้ลบตอนยกเลิกจ่าย)
       const i = b.paidMonths.indexOf(ym);
-      if (i >= 0) b.paidMonths.splice(i, 1);
-      else {
+      if (i >= 0) {
+        b.paidMonths.splice(i, 1);
+        if (b.paidTx[ym]) { data.transactions = data.transactions.filter((t) => t.id !== b.paidTx[ym]); delete b.paidTx[ym]; }
+      } else {
         b.paidMonths.push(ym);
-        if (!b.variable && b.amount) Store.addTransaction({ type: 'expense', amount: b.amount, categoryId: b.categoryId, date: todayISO(), note: b.name });
+        if (!b.variable && b.amount) b.paidTx[ym] = Store.addTransaction({ type: 'expense', amount: b.amount, categoryId: b.categoryId, date: todayISO(), note: b.name }).id;
       }
       persist();
     },
@@ -440,6 +474,9 @@
     exportJSON() { return JSON.stringify(data, null, 2); },
     importJSON(text) { const obj = JSON.parse(text); if (!obj || !Array.isArray(obj.categories)) throw new Error('ไฟล์ไม่ถูกต้อง'); data = obj; migrate(); persist(); },
     resetAll() { data = seedData(); persist(); },
+    // ปุ่ม "ย้อนกลับ": เก็บสำเนาข้อมูลก่อนลบ/ยกเลิก แล้วคืนทั้งก้อน
+    snapshot: () => JSON.stringify(data),
+    restore(snap) { data = JSON.parse(snap); persist(); },
 
     todayISO, monthKey,
   };

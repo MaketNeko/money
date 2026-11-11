@@ -1,6 +1,6 @@
 // Service worker — network-first (ออนไลน์ได้ล่าสุดเสมอ, ออฟไลน์ fallback แคช)
 // เด้งเลข CACHE ทุกครั้งที่ deploy เพื่อเคลียร์แคชเก่า
-const CACHE = 'ngern-v15';
+const CACHE = 'ngern-v16';
 const SHELL = [
   './',
   './index.html',
@@ -64,11 +64,3 @@ self.addEventListener('message', (e) => {
   if (e.data === 'skipWaiting') self.skipWaiting();
 });
 
-// กดแจ้งเตือน → โฟกัสแอปที่เปิดอยู่ หรือเปิดหน้าต่างใหม่
-self.addEventListener('notificationclick', (e) => {
-  e.notification.close();
-  e.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true })
-      .then((cs) => (cs.length ? cs[0].focus() : self.clients.openWindow('./')))
-  );
-});

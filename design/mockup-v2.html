@@ -1,0 +1,613 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>เงินของฉัน — mockup v2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- Manrope ไม่มีอักษรไทย → ตัวเลข/ละตินใช้ Manrope, ไทยตกไปที่ Anuphan เอง (one stack, two jobs) -->
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600&family=Anuphan:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ---------- tokens: pastel-consumer (light) + true-neutral dark ---------- */
+:root {
+  --ground:#f3f5f7; --surface:#ffffff; --raised:#f2f8fd; --active:#e9ecef;
+  --border:#e6e6e6; --rule:#f4f4f4; --control:#d6d9dd;
+  --text:#1b1d1f; --muted:#5c6064;
+  --primary:#1b1d1f; --on-primary:#ffffff;
+  --accent:#1d5fd6; --accent-soft:#dcf1ff; --accent-ink:#0a3a80;
+  --positive:#2f7a45; --negative:#c41c29;
+  --pill-neg-bg:#ffedea; --pill-neg-ink:#831c1e; --pill-warn-bg:#fffbeb; --pill-warn-ink:#92400e;
+  --track:#e9edf1; --committed:#a9c6f2;
+  /* category tiles: pale bg + dark ink of the same hue */
+  --food-bg:#ffedd5; --food-ink:#7c2d12;
+  --trav-bg:#d5f5f0; --trav-ink:#0f4c45;
+  --shop-bg:#fde2ef; --shop-ink:#831843;
+  --bill-bg:#dcf1ff; --bill-ink:#0a3a80;
+  --heal-bg:#e6f4d7; --heal-ink:#2f5214;
+  --inc-bg:#dcfae5;  --inc-ink:#04250e;
+  --cash-bg:#fff3c4; --cash-ink:#6b4a00;
+  --radius-card:20px; --radius-in:10px; --radius-chip:8px;
+  --gap:16px; --pad:20px;
+  --font:"Manrope","Anuphan",system-ui,sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --ground:#000000; --surface:#111111; --raised:#1a1a1a; --active:#222222;
+  --border:#232323; --rule:#1a1a1a; --control:#444444;
+  --text:#ffffff; --muted:#b4b4b4; --primary:#ffffff; --on-primary:#000000;
+  --accent:#6b9cf0; --accent-soft:#14233d; --accent-ink:#bcd4ff;
+  --positive:#3fc07a; --negative:#e5566f;
+  --pill-neg-bg:#2c1a20; --pill-neg-ink:#ff9aa8; --pill-warn-bg:#2a2010; --pill-warn-ink:#f5c46b;
+  --track:#222222; --committed:#2f4f86;
+  --food-bg:#2e1c0e; --food-ink:#fdba74; --trav-bg:#0d2a27; --trav-ink:#7ee0d2;
+  --shop-bg:#2e1220; --shop-ink:#f9a8d4; --bill-bg:#14233d; --bill-ink:#bcd4ff;
+  --heal-bg:#1a2a10; --heal-ink:#b5e08a; --inc-bg:#172a1d; --inc-ink:#3fc07a;
+  --cash-bg:#2a2208; --cash-ink:#f5d76b; color-scheme: dark;
+} }
+:root[data-theme="dark"] {
+  --ground:#000000; --surface:#111111; --raised:#1a1a1a; --active:#222222;
+  --border:#232323; --rule:#1a1a1a; --control:#444444;
+  --text:#ffffff; --muted:#b4b4b4; --primary:#ffffff; --on-primary:#000000;
+  --accent:#6b9cf0; --accent-soft:#14233d; --accent-ink:#bcd4ff;
+  --positive:#3fc07a; --negative:#e5566f;
+  --pill-neg-bg:#2c1a20; --pill-neg-ink:#ff9aa8; --pill-warn-bg:#2a2010; --pill-warn-ink:#f5c46b;
+  --track:#222222; --committed:#2f4f86;
+  --food-bg:#2e1c0e; --food-ink:#fdba74; --trav-bg:#0d2a27; --trav-ink:#7ee0d2;
+  --shop-bg:#2e1220; --shop-ink:#f9a8d4; --bill-bg:#14233d; --bill-ink:#bcd4ff;
+  --heal-bg:#1a2a10; --heal-ink:#b5e08a; --inc-bg:#172a1d; --inc-ink:#3fc07a;
+  --cash-bg:#2a2208; --cash-ink:#f5d76b; color-scheme: dark;
+}
+
+/* ---------- ชุดสี "ดวงดาว" (จากแอปจริง) — กลางคืน = ค่าเริ่มต้น, กลางวันตามธีม ---------- */
+/* taste-skill-ignore: palette ของเจ้าของแอป (brand) — ฟ้าไล่เฉด + จุดดาว + ดาวกระพริบ คงไว้ตามเดิม */
+:root[data-palette="star"] {
+  --ground:#0B1730; --surface:#13213F; --raised:#1A2745; --active:#22325A;
+  --border:#24365F; --rule:#1C2C50; --control:#3A5084;
+  --text:#F5F7FF; --muted:#9FB3DE; --primary:#FFC200; --on-primary:#10254B;
+  --accent:#FFC200; --accent-soft:#2A2A1A; --accent-ink:#FFD866;
+  --positive:#34D399; --negative:#F87171;
+  --pill-neg-bg:#3A1C2A; --pill-neg-ink:#FFB3B3; --pill-warn-bg:#33290F; --pill-warn-ink:#FFD866;
+  --track:#22325A; --committed:#6FD3E8;
+  --food-bg:#3A2A1C; --food-ink:#FDBA74; --trav-bg:#123A44; --trav-ink:#7EE0D2;
+  --shop-bg:#3A1C3A; --shop-ink:#F9A8D4; --bill-bg:#1C3060; --bill-ink:#BCD4FF;
+  --heal-bg:#1E3A24; --heal-ink:#B5E08A; --inc-bg:#123A2C; --inc-ink:#34D399;
+  --cash-bg:#3A3214; --cash-ink:#FFD866;
+  --sky:linear-gradient(180deg,#0A1226 0%,#132A56 55%,#0B275D 100%);
+  --dot1:rgba(255,255,255,.55); --dot2:rgba(255,255,255,.40); color-scheme:dark;
+}
+:root[data-palette="star"][data-theme="light"] {
+  --ground:#EAF2FB; --surface:#FFFFFF; --raised:#F2F7FD; --active:#DCEBFB;
+  --border:#CFE0F5; --rule:#E3EDF9; --control:#B8CDEB;
+  --text:#10254B; --muted:#5B6E99; --primary:#10254B; --on-primary:#FFFFFF;
+  --accent:#E8A800; --accent-soft:#FFF3C4; --accent-ink:#6B4A00;
+  --positive:#0E7A55; --negative:#C41C29;
+  --pill-neg-bg:#FFE9E4; --pill-neg-ink:#8A2414; --pill-warn-bg:#FFF6D6; --pill-warn-ink:#7A5300;
+  --track:#DCEBFB; --committed:#368ACE;
+  --food-bg:#ffedd5; --food-ink:#7c2d12; --trav-bg:#d5f5f0; --trav-ink:#0f4c45;
+  --shop-bg:#fde2ef; --shop-ink:#831843; --bill-bg:#dcf1ff; --bill-ink:#0a3a80;
+  --heal-bg:#e6f4d7; --heal-ink:#2f5214; --inc-bg:#dcfae5; --inc-ink:#04250e;
+  --cash-bg:#fff3c4; --cash-ink:#6b4a00;
+  --sky:linear-gradient(180deg,#EAF2FB 0%,#F6FAFF 100%);
+  --dot1:rgba(16,37,75,.14); --dot2:rgba(16,37,75,.10); color-scheme:light;
+}
+@media (prefers-color-scheme: light) { :root[data-palette="star"]:not([data-theme="dark"]) {
+  --ground:#EAF2FB; --surface:#FFFFFF; --raised:#F2F7FD; --active:#DCEBFB;
+  --border:#CFE0F5; --rule:#E3EDF9; --control:#B8CDEB;
+  --text:#10254B; --muted:#5B6E99; --primary:#10254B; --on-primary:#FFFFFF;
+  --accent:#E8A800; --accent-soft:#FFF3C4; --accent-ink:#6B4A00;
+  --positive:#0E7A55; --negative:#C41C29;
+  --pill-neg-bg:#FFE9E4; --pill-neg-ink:#8A2414; --pill-warn-bg:#FFF6D6; --pill-warn-ink:#7A5300;
+  --track:#DCEBFB; --committed:#368ACE;
+  --food-bg:#ffedd5; --food-ink:#7c2d12; --trav-bg:#d5f5f0; --trav-ink:#0f4c45;
+  --shop-bg:#fde2ef; --shop-ink:#831843; --bill-bg:#dcf1ff; --bill-ink:#0a3a80;
+  --heal-bg:#e6f4d7; --heal-ink:#2f5214; --inc-bg:#dcfae5; --inc-ink:#04250e;
+  --cash-bg:#fff3c4; --cash-ink:#6b4a00;
+  --sky:linear-gradient(180deg,#EAF2FB 0%,#F6FAFF 100%);
+  --dot1:rgba(16,37,75,.14); --dot2:rgba(16,37,75,.10); color-scheme:light;
+} }
+:root[data-palette="star"] body {
+  background-color:var(--ground);
+  background-image:var(--sky), radial-gradient(circle, var(--dot1) 1px, transparent 1.6px), radial-gradient(circle, var(--dot2) 1.2px, transparent 2px);
+  background-size:100% 100%, 26px 26px, 64px 64px; background-position:0 0, 0 0, 14px 20px;
+  background-repeat:no-repeat, repeat, repeat; background-attachment:fixed;
+}
+:root[data-palette="star"] .topbar { background:transparent; }
+:root[data-palette="star"] .plan .spent { background:var(--accent); }
+:root[data-palette="star"] .card-h .link { color:var(--accent-ink); }
+.sky { display:none; }
+:root[data-palette="star"] .sky { display:block; position:fixed; inset:0; pointer-events:none; z-index:0; overflow:hidden; }
+:root[data-palette="star"] .app { position:relative; z-index:1; }
+.sky span { position:absolute; line-height:1; animation:twinkle 2.6s ease-in-out infinite; }
+.sky .a { top:96px; right:26px; font-size:22px; color:var(--accent); }
+.sky .b { top:70px; right:64px; font-size:12px; color:var(--committed); animation-delay:.4s; }
+.sky .c { top:44%; left:22px; font-size:13px; color:var(--committed); animation-delay:.9s; }
+.sky .d { bottom:18%; right:40%; font-size:10px; color:var(--accent); animation-delay:1.3s; }
+@keyframes twinkle { 0%,100% { opacity:.35; transform:scale(.85); } 50% { opacity:1; transform:scale(1.1); } }
+@media (prefers-reduced-motion: reduce) { .sky span { animation:none; opacity:.7; } }
+
+/* ---------- base ---------- */
+* { box-sizing:border-box; margin:0; }
+body { background:var(--ground); color:var(--text); font:400 16px/1.5 var(--font); -webkit-font-smoothing:antialiased; }
+button, input { font:inherit; color:inherit; }
+button { cursor:pointer; }
+.num { font-variant-numeric:tabular-nums; }
+.muted { color:var(--muted); }
+:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+[hidden] { display:none !important; }
+
+/* ---------- shell: phone = top bar + bottom nav; ≥900 = open-plane sidebar ---------- */
+.app { min-height:100vh; }
+.topbar { height:48px; display:flex; align-items:center; gap:10px; padding:0 16px; position:sticky; top:0; background:var(--ground); z-index:5; }
+.mark { width:28px; height:28px; flex:none; }
+.brand { font-weight:600; font-size:16px; flex:1; }
+.theme-btn { height:36px; white-space:nowrap; font-size:13px !important; padding:0 12px; border-radius:999px; border:1px solid var(--control); background:var(--surface); font-size:14px; }
+.side { display:none; }
+.canvas { padding:8px 16px 112px; max-width:1180px; }
+.bottomnav { position:fixed; left:0; right:0; bottom:0; z-index:6; background:var(--surface); border-top:1px solid var(--border);
+  display:grid; grid-template-columns:repeat(5,1fr); align-items:center; padding:6px 8px calc(6px + env(safe-area-inset-bottom)); }
+.bottomnav button { background:none; border:0; display:flex; flex-direction:column; align-items:center; gap:2px; font-size:12px; color:var(--muted); min-height:48px; justify-content:center; }
+.bottomnav button.on { color:var(--text); font-weight:600; }
+.bottomnav .add { background:var(--primary); color:var(--on-primary); border-radius:999px; height:48px; width:48px; margin:0 auto; font-size:24px; line-height:1; }
+.bottomnav svg, .side svg { width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; }
+
+@media (min-width:900px) {
+  .app { display:grid; grid-template-columns:240px 1fr; }
+  .topbar, .bottomnav { display:none; }
+  .side { display:flex; flex-direction:column; gap:2px; padding:24px 12px; position:sticky; top:0; height:100vh; }
+  .side .who { display:flex; align-items:center; gap:10px; padding:0 8px 24px; font-weight:600; }
+  .side .nav { height:34px; display:flex; align-items:center; gap:10px; padding:0 10px; border-radius:8px; border:0; background:none; color:var(--muted); font-size:14px; text-align:left; }
+  .side .nav.on { background:var(--active); color:var(--text); }
+  .side .grp { font-size:13px; color:var(--muted); padding:24px 10px 6px; }
+  .side .foot { margin-top:auto; display:flex; flex-direction:column; gap:8px; }
+  .canvas { padding:32px 32px 48px 8px; }
+}
+
+/* ---------- title row ---------- */
+.title { display:flex; align-items:flex-end; gap:12px; flex-wrap:wrap; margin:8px 0 16px; }
+.title h1 { font-size:24px; font-weight:600; line-height:1.25; letter-spacing:-.01em; }
+.title .sub { font-size:14px; color:var(--muted); width:100%; order:3; }
+.title .sub b { color:var(--negative); font-weight:600; }
+.btn-primary { height:40px; padding:0 18px; border-radius:999px; border:0; background:var(--primary); color:var(--on-primary); font-weight:600; font-size:15px; }
+.btn-ghost { height:36px; padding:0 14px; border-radius:999px; border:1px solid var(--control); background:var(--surface); font-size:14px; font-weight:500; white-space:nowrap; }
+.btn-primary:active, .btn-ghost:active, .key:active { transform:scale(.97); }
+.title .btn-primary { margin-left:auto; display:none; }
+@media (min-width:900px) { .title { align-items:center; } .title h1 { font-size:28px; } .title .sub { order:0; width:auto; flex:1; } .title .btn-primary { display:inline-block; } }
+
+/* ---------- grid: phone = 1 col; ≥900 = 12 cols (left 7 / right 5), one 16px gutter ---------- */
+.grid { display:grid; gap:var(--gap); align-items:start; }
+@media (min-width:900px) { .grid { grid-template-columns:7fr 5fr; } }
+/* phone: บล็อกที่มีงานต้องทำ (บิลค้าง) ขึ้นก่อน */
+@media (max-width:899px) { .stack { display:contents !important; } .grid { display:flex; flex-direction:column; align-items:stretch; }
+  .o1{order:1} .o2{order:2} .o3{order:3} .o4{order:4} .o5{order:5}
+  .bill-row .btn-ghost { width:auto !important; padding:0 12px; height:34px; font-size:13px; } }
+.stack { display:grid; gap:var(--gap); }
+
+.card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-card); padding:var(--pad); }
+.card-h { display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin-bottom:12px; }
+.card-h h2 { font-size:18px; font-weight:500; }
+.card-h .link { background:none; border:0; color:var(--accent); font-size:14px; padding:4px 0; }
+
+/* ---------- balance (the answer figure) ---------- */
+.bal-label { font-size:14px; color:var(--muted); }
+.bal { font-size:34px; font-weight:600; letter-spacing:-.02em; line-height:1.15; margin:2px 0 14px; }
+.bal .dec { font-size:20px; color:var(--muted); font-weight:500; }
+.row { display:grid; grid-template-columns:40px 1fr auto; gap:12px; align-items:center; min-height:56px; border-top:1px solid var(--rule); }
+.row:first-of-type { border-top:0; }
+.tile { width:40px; height:40px; border-radius:var(--radius-in); display:grid; place-items:center; font-weight:600; font-size:15px; }
+.row .t { font-size:15px; font-weight:500; line-height:1.3; }
+.row .s { font-size:13px; color:var(--muted); line-height:1.4; }
+.row .amt { font-size:15px; font-weight:600; text-align:right; white-space:nowrap; }
+.amt.zero { color:var(--muted); font-weight:500; }
+.amt.inc { color:var(--positive); }
+
+.fx { margin-top:12px; padding-top:12px; border-top:1px solid var(--border); }
+.fx-h { font-size:14px; color:var(--muted); margin-bottom:2px; }
+.fx-cap { font-size:13px; color:var(--muted); margin-top:6px; }
+.fx-cap b { color:var(--text); font-weight:600; }
+@media (max-width:899px) { .fx .btn-ghost { padding:0 12px; height:34px; font-size:13px; } }
+
+/* ---------- bills due ---------- */
+.notice { display:flex; align-items:center; gap:10px; padding:12px 14px; border-radius:14px; background:var(--pill-neg-bg); color:var(--pill-neg-ink); font-size:14px; margin-bottom:8px; }
+.notice svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:1.8; flex:none; }
+.bill-row { grid-template-columns:40px 1fr auto auto; }
+.pill { display:inline-block; font-size:12px; font-weight:500; padding:1px 8px; border-radius:999px; white-space:nowrap; flex:none; }
+.pill.neg { background:var(--pill-neg-bg); color:var(--pill-neg-ink); }
+.pill.warn { background:var(--pill-warn-bg); color:var(--pill-warn-ink); }
+.pill.ok { background:var(--inc-bg); color:var(--inc-ink); }
+
+/* ---------- signature: the month strip (spent | bills still due | left) ---------- */
+.plan { display:flex; height:14px; border-radius:999px; overflow:hidden; background:var(--track); margin:10px 0 12px; gap:2px; }
+.plan i { display:block; height:100%; }
+.plan .spent { background:var(--accent); }
+.plan .due { background:var(--committed); }
+.plan-legend { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+.plan-legend div { font-size:13px; color:var(--muted); }
+.plan-legend b { display:block; font-size:18px; font-weight:600; color:var(--text); }
+.plan-legend .dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; vertical-align:1px; }
+.plan-cap { font-size:14px; color:var(--muted); margin-top:12px; }
+.plan-cap b { color:var(--text); font-weight:600; }
+
+/* ---------- category ranking ---------- */
+.cat { display:grid; grid-template-columns:40px 1fr auto; gap:12px; align-items:center; padding:8px 0; }
+.cat .bar { height:3px; border-radius:2px; background:var(--control); margin-top:6px; }
+.cat:first-child .bar { background:var(--text); }
+
+/* ---------- history ---------- */
+.ctrl-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:12px; }
+.month-sw { display:flex; align-items:center; gap:4px; background:var(--surface); border:1px solid var(--border); border-radius:999px; padding:3px; }
+.month-sw button { width:36px; height:36px; border-radius:50%; border:0; background:none; font-size:18px; }
+.month-sw span { min-width:130px; text-align:center; font-weight:500; font-size:15px; }
+.chips { display:flex; gap:8px; overflow-x:auto; padding-bottom:2px; scrollbar-width:none; }
+.chip { flex:none; height:36px; padding:0 14px; border-radius:999px; border:1px solid var(--control); background:var(--surface); font-size:14px; white-space:nowrap; }
+.chip.on { background:var(--primary); color:var(--on-primary); border-color:var(--primary); }
+.chip b { font-weight:600; margin-left:4px; }
+.search { width:100%; height:44px; border-radius:999px; border:1px solid var(--control); background:var(--surface); padding:0 18px; font-size:15px; }
+.search::placeholder { color:var(--muted); }
+.seg { display:inline-flex; background:var(--active); border-radius:999px; padding:3px; }
+.seg button { height:34px; padding:0 14px; border-radius:999px; border:0; background:none; font-size:14px; color:var(--muted); }
+.seg button.on { background:var(--surface); color:var(--text); font-weight:600; }
+.sums { display:grid; grid-template-columns:repeat(3,1fr); }
+.sums div { padding:0 12px; border-left:1px solid var(--border); font-size:13px; color:var(--muted); }
+.sums div:first-child { border-left:0; padding-left:0; }
+.sums b { display:block; font-size:20px; font-weight:600; color:var(--text); }
+.day-h { display:flex; justify-content:space-between; font-size:13px; color:var(--muted); padding:14px 0 4px; }
+.empty { border:1px dashed var(--control); border-radius:var(--radius-in); padding:12px 14px; font-size:14px; color:var(--muted); }
+
+/* ---------- add sheet (floats → shadow allowed) ---------- */
+.dim { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:20; display:flex; align-items:flex-end; justify-content:center; }
+.sheet { background:var(--surface); width:100%; max-width:440px; border-radius:24px 24px 0 0; padding:12px 20px calc(16px + env(safe-area-inset-bottom)); box-shadow:0 -8px 32px rgba(0,0,0,.18); /* taste-skill-ignore: dialog floats */ max-height:96vh; overflow-y:auto; animation:up .22s ease-out; }
+@media (min-width:900px) { .dim { align-items:center; } .sheet { border-radius:24px; } }
+@keyframes up { from { transform:translateY(24px); opacity:0; } }
+@media (prefers-reduced-motion: reduce) { .sheet { animation:none; } }
+.grab { width:40px; height:4px; border-radius:2px; background:var(--control); margin:0 auto 12px; }
+.sheet h2 { font-size:18px; font-weight:600; margin-bottom:10px; }
+.amount { text-align:right; font-size:40px; font-weight:600; letter-spacing:-.02em; padding:4px 0; }
+.amount .cur { font-size:22px; color:var(--muted); margin-right:4px; }
+.after { font-size:13px; color:var(--muted); text-align:right; margin-bottom:10px; }
+.after b { color:var(--text); }
+.after b.neg { color:var(--negative); }
+.f-label { font-size:14px; font-weight:500; margin:12px 0 8px; }
+.cats { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+.cats button { border:2px solid transparent; border-radius:14px; padding:8px 4px; display:flex; flex-direction:column; align-items:center; gap:4px; font-size:13px; background:var(--raised); }
+.cats button .tile { width:34px; height:34px; font-size:14px; }
+.cats button.on { border-color:var(--text); }
+.note { width:100%; height:44px; border-radius:var(--radius-in); border:1px solid var(--control); background:var(--surface); padding:0 14px; font-size:15px; }
+.keys { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:14px 0 12px; }
+.key { height:52px; border-radius:14px; border:0; background:var(--raised); font-size:22px; font-weight:500; }
+.save { width:100%; height:52px; font-size:16px; }
+.hint { font-size:12px; color:var(--muted); text-align:center; margin-top:8px; }
+
+.toast { position:fixed; left:50%; bottom:96px; transform:translateX(-50%); background:var(--primary); color:var(--on-primary); padding:10px 18px; border-radius:999px; font-size:14px; z-index:30; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9H4z"/><path d="M10 20v-6h4v6"/></symbol>
+  <symbol id="i-cal" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 1112 0v5l2 2H4z"/><path d="M10 20a2 2 0 004 0"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M16 4.5a3.5 3.5 0 010 7M18 14c2 .8 3 3 3 6"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 16.5v.5"/></symbol>
+</svg>
+
+<div class="sky" aria-hidden="true"><span class="a">✦</span><span class="b">✦</span><span class="c">✧</span><span class="d">✦</span></div><!-- taste-skill-ignore -->
+<div class="app">
+  <!-- desktop sidebar -->
+  <aside class="side" aria-label="เมนู">
+    <div class="who"><svg class="mark" viewBox="0 0 28 28" aria-hidden="true"><rect width="28" height="28" rx="8" fill="var(--accent)"/><path d="M8 18.5c1.6 1.4 3.6 2 6 2 3.3 0 5.5-1.6 5.5-4s-2-3.4-5.5-4-5.2-1.6-5.2-3.7S11 5.5 14 5.5c2 0 3.6.5 5 1.6M14 3.5v21" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>เงินของฉัน</div>
+    <button class="nav" data-go="home"><svg><use href="#i-home"/></svg>ภาพรวม</button>
+    <button class="nav" data-go="history"><svg><use href="#i-cal"/></svg>ประวัติ</button>
+    <button class="nav"><svg><use href="#i-bell"/></svg>บิลประจำ</button>
+    <button class="nav"><svg><use href="#i-users"/></svg>หนี้</button>
+    <div class="foot">
+      <button class="nav" data-palette-toggle><svg><use href="#i-gear"/></svg><span data-palette-label>ชุดสี: ดวงดาว</span></button>
+      <button class="nav" data-theme-toggle><svg><use href="#i-gear"/></svg><span data-theme-label>ธีม: ตามระบบ</span></button>
+      <button class="btn-primary" data-add>＋ ลงเงิน</button>
+    </div>
+  </aside>
+
+  <!-- phone top bar -->
+  <header class="topbar">
+    <svg class="mark" viewBox="0 0 28 28" aria-hidden="true"><rect width="28" height="28" rx="8" fill="var(--accent)"/><path d="M8 18.5c1.6 1.4 3.6 2 6 2 3.3 0 5.5-1.6 5.5-4s-2-3.4-5.5-4-5.2-1.6-5.2-3.7S11 5.5 14 5.5c2 0 3.6.5 5 1.6M14 3.5v21" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>
+    <span class="brand">เงินของฉัน</span>
+    <button class="theme-btn" data-palette-toggle><span data-palette-label>ชุดสี: ดวงดาว</span></button>
+    <button class="theme-btn" data-theme-toggle><span data-theme-label>ธีม: ตามระบบ</span></button>
+  </header>
+
+  <main class="canvas">
+    <!-- ================= HOME ================= -->
+    <section id="home" data-screen>
+      <div class="title">
+        <h1>ภาพรวม · <span id="monthName"></span></h1>
+        <p class="sub" id="finding"></p>
+        <button class="btn-primary" data-add>＋ ลงเงิน</button>
+      </div>
+      <div class="grid">
+        <div class="stack">
+          <div class="card o1">
+            <div class="bal-label">เงินทั้งหมด (บาท)</div>
+            <div class="bal num" id="balTotal"></div>
+            <div id="walletRows"></div>
+            <div class="fx" id="fxBlock"></div>
+          </div>
+          <div class="card o3">
+            <div class="card-h"><h2>เดือนนี้</h2><span class="muted" style="font-size:14px" id="planPeriod"></span></div>
+            <div class="plan" id="planBar" role="img"></div>
+            <div class="plan-legend" id="planLegend"></div>
+            <p class="plan-cap" id="planCap"></p>
+          </div>
+          <div class="card o5">
+            <div class="card-h"><h2>รายการล่าสุด</h2><button class="link" data-go="history">ดูประวัติ</button></div>
+            <div id="recentRows"></div>
+          </div>
+        </div>
+        <div class="stack">
+          <div class="card o2">
+            <div class="card-h"><h2>บิลประจำเดือน</h2><button class="link">ดูทั้งหมด</button></div>
+            <div id="billNotice"></div>
+            <div id="billRows"></div>
+          </div>
+          <div class="card o4">
+            <div class="card-h"><h2>จ่ายไปกับอะไร</h2><span class="muted" style="font-size:14px">มากสุดก่อน</span></div>
+            <div id="catRows"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= HISTORY ================= -->
+    <section id="history" data-screen hidden>
+      <div class="title"><h1>ประวัติ</h1><button class="btn-primary" data-add>＋ ลงเงิน</button></div>
+      <div class="ctrl-row">
+        <div class="month-sw"><button aria-label="เดือนก่อน">‹</button><span id="hMonth"></span><button aria-label="เดือนถัดไป" disabled style="opacity:.35">›</button></div>
+        <div class="seg" id="hType"><button class="on" data-t="all">ทั้งหมด</button><button data-t="expense">รายจ่าย</button><button data-t="income">รายรับ</button></div>
+      </div>
+      <div class="chips" id="hWallets" style="margin-bottom:12px"></div>
+      <input class="search" id="hSearch" type="search" enterkeyhint="search" placeholder="ค้นหาโน้ต หรือหมวดหมู่">
+      <div class="grid" style="margin-top:var(--gap)">
+        <div class="card" id="hList"></div>
+        <div class="card"><div class="card-h"><h2 id="hSumTitle">สรุปช่วงนี้</h2></div><div class="sums" id="hSums"></div></div>
+      </div>
+    </section>
+  </main>
+
+  <nav class="bottomnav" aria-label="เมนู">
+    <button data-go="home"><svg><use href="#i-home"/></svg>ภาพรวม</button>
+    <button data-go="history"><svg><use href="#i-cal"/></svg>ประวัติ</button>
+    <button class="add" data-add aria-label="ลงเงิน">＋</button>
+    <button><svg><use href="#i-bell"/></svg>บิล</button>
+    <button><svg><use href="#i-users"/></svg>หนี้</button>
+  </nav>
+</div>
+
+<div id="overlay"></div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+/* ===================== sample data (แทนด้วยข้อมูลจริงจาก Store ทีหลัง) ===================== */
+const TODAY = '2026-11-11';
+const CATS = {
+  food: { name:'อาหาร', tone:'food' }, trav: { name:'เดินทาง', tone:'trav' }, shop: { name:'ช้อปปิ้ง', tone:'shop' },
+  bill: { name:'บิล', tone:'bill' }, heal: { name:'สุขภาพ', tone:'heal' }, work: { name:'ฟรีแลนซ์', tone:'inc' }, salary: { name:'เงินเดือน', tone:'inc' },
+};
+const WALLETS = [
+  { id:'cash', name:'เงินสด', cur:'THB', open:2000, tone:'cash' },
+  { id:'kbank', name:'กสิกรไทย', cur:'THB', open:3120.50, tone:'bill' },
+  { id:'pp', name:'PayPal', cur:'USD', open:0, tone:'trav' },
+];
+const TX = [
+  { d:'2026-11-01', type:'income', cat:'salary', w:'kbank', amt:28000, note:'เงินเดือน ต.ค.' },
+  { d:'2026-11-01', type:'expense', cat:'bill', w:'kbank', amt:6500, note:'ค่าห้อง' },
+  { d:'2026-11-03', type:'income', cat:'work', w:'pp', amt:150, note:'งานแปล' },
+  { d:'2026-11-04', type:'expense', cat:'food', w:'cash', amt:185, note:'ข้าวมันไก่ + ชาเย็น' },
+  { d:'2026-11-05', type:'transfer', w:'pp', to:'kbank', amt:150, toAmt:4980, note:'PayPal ถอน USD 150 @ 33.20' },
+  { d:'2026-11-06', type:'expense', cat:'shop', w:'kbank', amt:1290, note:'รองเท้าวิ่ง' },
+  { d:'2026-11-07', type:'expense', cat:'trav', w:'kbank', amt:420, note:'Grab ไปออฟฟิศ' },
+  { d:'2026-11-08', type:'expense', cat:'food', w:'cash', amt:360, note:'หมูกระทะกับเพื่อน' },
+  { d:'2026-11-09', type:'expense', cat:'heal', w:'kbank', amt:650, note:'ร้านยา' },
+  { d:'2026-11-10', type:'expense', cat:'food', w:'kbank', amt:239, note:'LINE MAN ข้าวกะเพรา' },
+  { d:'2026-11-10', type:'expense', cat:'trav', w:'cash', amt:44, note:'BTS' },
+  { d:'2026-11-10', type:'income', cat:'work', w:'pp', amt:85, note:'ออกแบบโลโก้' },
+  { d:'2026-11-11', type:'expense', cat:'food', w:'cash', amt:65, note:'กาแฟ' },
+];
+const BILLS = [
+  { name:'ค่าห้อง', due:1, amt:6500, remind:3, paid:true },
+  { name:'ค่าเน็ตบ้าน', due:9, amt:599, remind:3, paid:false },
+  { name:'ค่าโทรศัพท์', due:15, amt:399, remind:5, paid:false },
+  { name:'Netflix', due:25, amt:419, remind:3, paid:false },
+];
+
+/* ===================== derived (คิดจากแถวเสมอ ไม่พิมพ์ยอดรวมเอง) ===================== */
+const r2 = (n) => Math.round(n * 100) / 100 || 0;
+const nf2 = new Intl.NumberFormat('th-TH', { minimumFractionDigits:2, maximumFractionDigits:2 });
+const sym = (c) => ({ THB:'฿', USD:'$' }[c]);
+const money = (n, c='THB') => (r2(n) < 0 ? '−' : '') + sym(c) + nf2.format(Math.abs(r2(n)));
+function walletBal(id) {
+  const w = WALLETS.find((x) => x.id === id); let b = w.open;
+  for (const t of TX) {
+    if (t.type === 'income' && t.w === id) b += t.amt;
+    if (t.type === 'expense' && t.w === id) b -= t.amt;
+    if (t.type === 'transfer') { if (t.w === id) b -= t.amt; if (t.to === id) b += t.toAmt; }
+  }
+  return r2(b);
+}
+const day = Number(TODAY.slice(8));
+const bills = BILLS.map((b) => ({ ...b, left: b.due - day }));
+const pending = bills.filter((b) => !b.paid && b.left <= b.remind);   // ← logic เดียวกับที่ใส่ในแอปจริง v0.17
+const unpaid = bills.filter((b) => !b.paid);
+const thbIncome = TX.filter((t) => t.type === 'income' && WALLETS.find((w) => w.id === t.w).cur === 'THB').reduce((a, t) => a + t.amt, 0)
+  + TX.filter((t) => t.type === 'transfer' && t.to && WALLETS.find((w) => w.id === t.w).cur !== 'THB').reduce((a, t) => a + t.toAmt, 0);
+const spent = TX.filter((t) => t.type === 'expense').reduce((a, t) => a + t.amt, 0);
+const dueSum = unpaid.reduce((a, b) => a + b.amt, 0);
+const leftover = thbIncome - spent - dueSum;
+const totalTHB = WALLETS.filter((w) => w.cur === 'THB').reduce((a, w) => a + walletBal(w.id), 0);
+// checks: ส่วนย่อยต้องรวมได้เท่ายอดที่โชว์
+const byCat = {}; TX.filter((t) => t.type === 'expense').forEach((t) => (byCat[t.cat] = (byCat[t.cat] || 0) + t.amt));
+console.assert(Object.values(byCat).reduce((a, b) => a + b, 0) === spent, 'category sums ≠ spent');
+console.assert(r2(spent + dueSum + leftover) === r2(thbIncome), 'plan parts ≠ income');
+const RATE = 33.20; // เรตล่าสุดที่ใช้ถอน (ตัวอย่าง)
+console.assert(walletBal('pp') === 85, 'PayPal = 150 in − 150 out + 85 in');
+
+/* ===================== render ===================== */
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]));
+const MONTHS = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+const dLabel = (iso) => { const n = Number(iso.slice(8)); return iso === TODAY ? 'วันนี้' : n === day - 1 ? 'เมื่อวาน' : `${n} ${MONTHS[Number(iso.slice(5,7)) - 1]}`; };
+const tile = (tone, ch) => `<span class="tile" style="background:var(--${tone}-bg);color:var(--${tone}-ink)">${esc(ch)}</span>`;
+const dueText = (b) => b.left < 0 ? `เลยกำหนด ${-b.left} วัน` : b.left === 0 ? 'ครบวันนี้' : `อีก ${b.left} วัน`;
+
+function txRow(t) {
+  const w = WALLETS.find((x) => x.id === t.w);
+  if (t.type === 'transfer') {
+    const to = WALLETS.find((x) => x.id === t.to);
+    return `<div class="row"><span class="tile" style="background:var(--active);color:var(--muted)">⇄</span><div><div class="t">โอน ${esc(w.name)} → ${esc(to.name)}</div><div class="s">${esc(t.note)} · ${dLabel(t.d)}</div></div>
+      <div class="amt num muted" style="font-weight:500">${money(t.amt, w.cur)} → ${money(t.toAmt, to.cur)}</div></div>`;
+  }
+  const c = CATS[t.cat]; const inc = t.type === 'income';
+  return `<div class="row">${tile(c.tone, c.name[0])}<div><div class="t">${esc(t.note)}</div><div class="s">${c.name} · ${esc(w.name)} · ${dLabel(t.d)}</div></div>
+    <div class="amt num ${inc ? 'inc' : ''}">${inc ? '+' : ''}${money(t.amt, w.cur)}</div></div>`;
+}
+
+function renderHome() {
+  $('#monthName').textContent = 'พฤศจิกายน 2569';
+  const worst = pending.slice().sort((a, b) => a.left - b.left)[0];
+  $('#finding').innerHTML = worst ? `<b>${esc(worst.name)} ฿${nf2.format(worst.amt)} ${dueText(worst)}</b> · เหลือใช้ได้ถึงสิ้นเดือน ${money(leftover)}` : `เหลือใช้ได้ถึงสิ้นเดือน ${money(leftover)}`;
+  const [i, d] = nf2.format(totalTHB).split('.');
+  $('#balTotal').innerHTML = `฿${i}<span class="dec">.${d}</span>`;
+  $('#walletRows').innerHTML = WALLETS.filter((w) => w.cur === 'THB').map((w) => { const b = walletBal(w.id);
+    return `<div class="row">${tile(w.tone, w.name[0])}<div><div class="t">${esc(w.name)}</div><div class="s">บาท</div></div>
+      <div class="amt num ${b === 0 ? 'zero' : ''}">${money(b, w.cur)}</div></div>`; }).join('');
+  // กระเป๋าต่างประเทศ (PayPal ฯลฯ): ยอดสกุลเดิม + ประมาณเป็นบาท + ปุ่มถอนเข้าไทย + สรุปรายได้ต่างประเทศเดือนนี้
+  const fx = WALLETS.filter((w) => w.cur !== 'THB');
+  const fxIn = TX.filter((t) => t.type === 'income' && fx.some((w) => w.id === t.w)).reduce((a, t) => a + t.amt, 0);
+  const fxOut = TX.filter((t) => t.type === 'transfer' && fx.some((w) => w.id === t.w));
+  $('#fxBlock').innerHTML = fx.length ? `<div class="fx-h">กระเป๋าต่างประเทศ</div>` + fx.map((w) => { const b = walletBal(w.id);
+    return `<div class="row bill-row">${tile(w.tone, w.name[0])}<div><div class="t">${esc(w.name)} <span class="pill" style="background:var(--active);color:var(--muted)">${w.cur}</span></div><div class="s num">≈ ${money(b * RATE)} ที่ ${RATE.toFixed(2)} ฿/$</div></div>
+      <div class="amt num ${b === 0 ? 'zero' : ''}">${money(b, w.cur)}</div>
+      <button class="btn-ghost" onclick="toast('เปิดหน้าฝาก/ถอน แปลงสกุล (mockup)')">ถอนเข้าไทย</button></div>`; }).join('') +
+    `<p class="fx-cap">เดือนนี้รับ <b class="num">${money(fxIn, 'USD')}</b> · ถอนเข้าไทยแล้ว <b class="num">${money(fxOut.reduce((a, t) => a + t.amt, 0), 'USD')}</b> ได้ <b class="num">${money(fxOut.reduce((a, t) => a + t.toAmt, 0))}</b> · นับรายได้ภาษีแล้ว</p>` : '';
+
+  // signature: month strip
+  const pct = (n) => (n / thbIncome * 100).toFixed(2) + '%';
+  $('#planPeriod').textContent = `1–30 พ.ย. · วันนี้วันที่ ${day}`;
+  $('#planBar').innerHTML = `<i class="spent" style="width:${pct(spent)}"></i><i class="due" style="width:${pct(dueSum)}"></i>`;
+  $('#planBar').setAttribute('aria-label', `เงินเข้า ${money(thbIncome)} จ่ายแล้ว ${money(spent)} บิลรอจ่าย ${money(dueSum)} เหลือ ${money(leftover)}`);
+  $('#planLegend').innerHTML = `
+    <div><span class="dot" style="background:var(--accent)"></span>จ่ายแล้ว<b class="num">${money(spent)}</b></div>
+    <div><span class="dot" style="background:var(--committed)"></span>บิลรอจ่าย<b class="num">${money(dueSum)}</b></div>
+    <div><span class="dot" style="background:var(--track);outline:1px solid var(--control)"></span>เหลือใช้ได้<b class="num">${money(leftover)}</b></div>`;
+  $('#planCap').innerHTML = `จากเงินเข้าเดือนนี้ <b class="num">${money(thbIncome)}</b> · เฉลี่ยใช้ได้วันละ <b class="num">${money(leftover / (30 - day + 1))}</b> ถึงสิ้นเดือน`;
+
+  // bills: notice = the in-app reminder (no system notifications)
+  $('#billNotice').innerHTML = pending.length ? `<div class="notice"><svg><use href="#i-alert"/></svg>มีบิลค้าง ${pending.length} รายการ รวม ฿${nf2.format(pending.reduce((a, b) => a + b.amt, 0))}</div>` : '';
+  $('#billRows').innerHTML = bills.map((b) => {
+    const pill = b.paid ? '<span class="pill ok">จ่ายแล้ว</span>' : b.left < 0 ? `<span class="pill neg">${dueText(b)}</span>` : b.left <= b.remind ? `<span class="pill warn">${dueText(b)}</span>` : `<span class="s">${dueText(b)}</span>`;
+    return `<div class="row bill-row">${tile('bill', b.name[0])}<div><div class="t">${esc(b.name)}</div><div class="s">ทุกวันที่ ${b.due}</div><div style="margin-top:2px">${pill}</div></div>
+      <div class="amt num">${money(b.amt)}</div>
+      ${b.paid ? '<span style="width:84px"></span>' : `<button class="btn-ghost" style="width:84px" onclick="payBill(this)">จ่ายแล้ว</button>`}</div>`;
+  }).join('');
+
+  const cats = Object.entries(byCat).sort((a, b) => b[1] - a[1]); const max = cats[0][1];
+  $('#catRows').innerHTML = cats.map(([k, v]) => `<div class="cat">${tile(CATS[k].tone, CATS[k].name[0])}
+    <div><div style="display:flex;justify-content:space-between;font-size:15px"><span>${CATS[k].name}</span><span class="muted num" style="font-size:13px">${(v / spent * 100).toFixed(1)}%</span></div><div class="bar" style="width:${v / max * 100}%"></div></div>
+    <div class="amt num" style="font-weight:600;font-size:15px">${money(v)}</div></div>`).join('');
+
+  $('#recentRows').innerHTML = TX.slice().reverse().slice(0, 4).map(txRow).join('');
+}
+function payBill(btn) { btn.closest('.row').style.opacity = .5; btn.textContent = 'เรียบร้อย'; toast('บันทึกว่าจ่ายแล้ว (mockup)'); }
+
+/* ---------- history: search re-renders only the list → หน้าไม่ดีด คีย์บอร์ดไม่หลุด ---------- */
+const H = { type:'all', w:'', q:'' };
+function renderHistoryShell() {
+  $('#hMonth').textContent = 'พฤศจิกายน 2569';
+  $('#hWallets').innerHTML = [`<button class="chip ${!H.w ? 'on' : ''}" data-w="">ทุกกระเป๋า</button>`]
+    .concat(WALLETS.map((w) => `<button class="chip ${H.w === w.id ? 'on' : ''}" data-w="${w.id}">${esc(w.name)}<b class="num">${money(walletBal(w.id), w.cur)}</b></button>`)).join('');
+  renderHistoryList();
+}
+function renderHistoryList() {
+  const q = H.q.trim().toLowerCase();
+  const list = TX.filter((t) => (H.type === 'all' || t.type === H.type)
+    && (!H.w || t.w === H.w || t.to === H.w)
+    && (!q || t.note.toLowerCase().includes(q) || (t.cat && CATS[t.cat].name.includes(q)))).reverse();
+  const groups = {}; list.forEach((t) => (groups[t.d] = groups[t.d] || []).push(t));
+  $('#hList').innerHTML = `<div class="card-h"><h2>รายการ</h2><span class="muted num" style="font-size:14px">${list.length} รายการ</span></div>` +
+    (list.length ? Object.entries(groups).map(([d, ts]) => {
+      const out = ts.filter((t) => t.type === 'expense').reduce((a, t) => a + t.amt, 0);
+      return `<div class="day-h"><span>${dLabel(d)}</span><span class="num">${out ? 'จ่าย ' + money(out) : ''}</span></div>${ts.map(txRow).join('')}`;
+    }).join('') : `<div class="empty">ไม่มีรายการที่ตรงกับ “${esc(H.q)}” ในเดือนนี้</div>`);
+  const thb = list.filter((t) => t.type !== 'transfer' && WALLETS.find((w) => w.id === t.w).cur === 'THB');
+  const inc = thb.filter((t) => t.type === 'income').reduce((a, t) => a + t.amt, 0), exp = thb.filter((t) => t.type === 'expense').reduce((a, t) => a + t.amt, 0);
+  $('#hSums').innerHTML = `<div>รายรับ<b class="num" style="color:var(--positive)">+${money(inc)}</b></div><div>รายจ่าย<b class="num">${money(exp)}</b></div><div>สุทธิ<b class="num">${money(inc - exp)}</b></div>`;
+}
+$('#hSearch').addEventListener('input', (e) => { H.q = e.target.value; renderHistoryList(); });
+$('#hSearch').addEventListener('keydown', (e) => { if (e.key === 'Enter') e.target.blur(); });
+$('#hType').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; H.type = b.dataset.t; $('#hType').querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b)); renderHistoryList(); });
+$('#hWallets').addEventListener('click', (e) => { const b = e.target.closest('[data-w]'); if (!b) return; H.w = b.dataset.w; renderHistoryShell(); });
+
+/* ---------- add sheet: keypad + Enter = บันทึก ---------- */
+let A = null;
+function openAdd() { A = { amt:'', cat:'food', w:'cash', type:'expense' }; renderAdd(); }
+function renderAdd() {
+  const w = WALLETS.find((x) => x.id === A.w); const n = parseFloat(A.amt) || 0; const now = walletBal(A.w); const after = A.type === 'expense' ? now - n : now + n;
+  const catKeys = A.type === 'expense' ? ['food','trav','shop','bill','heal'] : ['salary','work'];
+  $('#overlay').innerHTML = `<div class="dim" onpointerdown="if(event.target===this)closeAdd()"><div class="sheet" role="dialog" aria-label="ลงเงิน">
+    <div class="grab"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center"><h2>ลงเงิน</h2>
+      <div class="seg"><button class="${A.type==='expense'?'on':''}" onclick="A.type='expense';A.cat='food';renderAdd()">รายจ่าย</button><button class="${A.type==='income'?'on':''}" onclick="A.type='income';A.cat='salary';renderAdd()">รายรับ</button></div></div>
+    <div class="amount num"><span class="cur">${sym(w.cur)}</span>${A.amt ? esc(A.amt) : '0'}</div>
+    <div class="after num">${esc(w.name)} ${money(now, w.cur)} → <b class="${after < 0 ? 'neg' : ''}">${money(after, w.cur)}</b></div>
+    <div class="cats">${catKeys.map((k) => `<button class="${A.cat===k?'on':''}" onclick="A.cat='${k}';renderAdd()">${tile(CATS[k].tone, CATS[k].name[0])}${CATS[k].name}</button>`).join('')}</div>
+    <div class="f-label">กระเป๋า</div>
+    <div class="chips">${WALLETS.map((x) => `<button class="chip ${A.w===x.id?'on':''}" onclick="A.w='${x.id}';renderAdd()">${esc(x.name)}<b class="num">${money(walletBal(x.id), x.cur)}</b></button>`).join('')}</div>
+    <div class="f-label">โน้ต</div><input class="note" id="aNote" placeholder="เช่น ข้าวเที่ยง" enterkeyhint="done">
+    <div class="keys">${['1','2','3','4','5','6','7','8','9','.','0','⌫'].map((k) => `<button class="key num" onclick="key('${k}')">${k}</button>`).join('')}</div>
+    <button class="btn-primary save" onclick="saveAdd()">บันทึก</button>
+    <div class="hint">กด Enter เพื่อบันทึก · Esc ปิด</div>
+  </div></div>`;
+}
+function key(k) { if (k === '⌫') A.amt = A.amt.slice(0, -1); else if (!(k === '.' && A.amt.includes('.')) && A.amt.length < 9) A.amt += k; const note = ($('#aNote') || {}).value; renderAdd(); if (note) $('#aNote').value = note; }
+function saveAdd() { if (!(parseFloat(A.amt) > 0)) { toast('ใส่จำนวนเงินก่อน'); return; } closeAdd(); toast('บันทึกแล้ว (mockup ไม่ได้บันทึกจริง)'); }
+function closeAdd() { A = null; $('#overlay').innerHTML = ''; }
+document.addEventListener('keydown', (e) => {
+  if (!A) return;
+  if (e.key === 'Escape') return closeAdd();
+  if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); return saveAdd(); }
+  if (document.activeElement && document.activeElement.id === 'aNote') return;
+  const m = /^(?:Digit|Numpad)(\d)$/.exec(e.code);
+  if (m) key(m[1]); else if (e.code === 'Period' || e.code === 'NumpadDecimal') key('.'); else if (e.key === 'Backspace') key('⌫');
+});
+
+/* ---------- nav, theme, toast ---------- */
+function go(s) {
+  document.querySelectorAll('[data-screen]').forEach((x) => (x.hidden = x.id !== s));
+  document.querySelectorAll('[data-go]').forEach((b) => b.classList.toggle('on', b.dataset.go === s));
+  if (s === 'history') renderHistoryShell();
+  scrollTo(0, 0); try { localStorage.setItem('mock.screen', s); } catch (e) {}
+}
+document.addEventListener('click', (e) => {
+  const g = e.target.closest('[data-go]'); if (g) go(g.dataset.go);
+  if (e.target.closest('[data-add]')) openAdd();
+  if (e.target.closest('[data-palette-toggle]')) setPalette(document.documentElement.dataset.palette === 'star' ? 'default' : 'star');
+  if (e.target.closest('[data-theme-toggle]')) {
+    const order = ['system', 'light', 'dark'], cur = document.documentElement.dataset.theme || 'system';
+    setTheme(order[(order.indexOf(cur) + 1) % 3]);
+  }
+});
+function setTheme(t) {
+  if (t === 'system') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
+  document.querySelectorAll('[data-theme-label]').forEach((x) => (x.textContent = 'ธีม: ' + { system:'ตามระบบ', light:'สว่าง', dark:'มืด' }[t]));
+  try { localStorage.setItem('mock.theme', t); } catch (e) {}
+}
+function setPalette(p) {
+  if (p === 'star') document.documentElement.dataset.palette = 'star'; else delete document.documentElement.dataset.palette;
+  document.querySelectorAll('[data-palette-label]').forEach((x) => (x.textContent = 'ชุดสี: ' + (p === 'star' ? 'ดวงดาว' : 'ปกติ')));
+  try { localStorage.setItem('mock.palette', p); } catch (e) {}
+}
+let tt; function toast(m) { const el = $('#toast'); el.textContent = m; el.hidden = false; clearTimeout(tt); tt = setTimeout(() => (el.hidden = true), 1800); }
+
+let saved = {}; try { saved = { s: localStorage.getItem('mock.screen'), t: localStorage.getItem('mock.theme'), p: localStorage.getItem('mock.palette') }; } catch (e) {}
+setTheme(saved.t || 'system'); setPalette(saved.p || 'star');
+renderHome(); go(saved.s || 'home');
+</script>
+</body>
+</html>

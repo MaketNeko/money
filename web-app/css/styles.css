@@ -454,3 +454,7 @@ button { font-family:inherit; }
   .update-banner, .install-banner { left:auto; right:24px; bottom:24px; }
 }
 @keyframes sheetPop { from { opacity:0; transform:translateY(16px) scale(.98); } to { opacity:1; transform:none; } }
+
+/* toast ที่มีปุ่ม "ย้อนกลับ" — ต้องกดได้ */
+.toast.has-undo { pointer-events:auto; display:flex; align-items:center; gap:14px; padding:8px 8px 8px 18px; }
+.toast-undo { background:none; border:0; color:var(--trust); font:inherit; font-weight:700; padding:6px 10px; border-radius:16px; cursor:pointer; }

@@ -11,7 +11,9 @@
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const icon = (id, cls = '') => `<svg class="i ${cls}"><use href="#${id}"/></svg>`;
-  const fmt = (n) => Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 2 });
+  // ปัด 2 ตำแหน่ง + || 0 กัน -0 / เศษทศนิยมจากการคูณเรต (เช่น -0.0000001 → 0)
+  const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100 || 0;
+  const fmt = (n) => r2(n).toLocaleString('en-US', { maximumFractionDigits: 2 });
   const mode = () => S.settings().mode;
 
   const MONTHS_FULL = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
@@ -20,6 +22,18 @@
   /* ---------- บันทึกการอัปเดต (แสดงในตั้งค่า > เกี่ยวกับ) ----------
      ทุกครั้งที่อัปเดตแอป เพิ่มรายการใหม่ไว้บนสุด */
   const CHANGELOG = [
+    { v: '0.17', date: '11 พ.ย. 2569', items: [
+      'แก้ยอดกระเป๋าขึ้น -0 หลังถอนเงินออกหมด (เช่น PayPal) — ตัดเศษทศนิยมจากการคูณเรตทิ้ง',
+      'หน้าประวัติ: พิมพ์ค้นหาแล้วหน้าไม่ดีดขึ้น/คีย์บอร์ดไม่หลุดแล้ว กด Enter เพื่อปิดคีย์บอร์ด',
+      'แก้กระเป๋า: ช่องยอดเงินเปลี่ยนเป็น "ยอดเงินในกระเป๋าตอนนี้" จริง ๆ — กรอกเท่าไหร่กระเป๋าก็ขึ้นเท่านั้น ไม่ทบกับรายการเดิมซ้ำอีก',
+      'เปลี่ยนการเตือน: เลิกเด้งแจ้งเตือนของเครื่องและเตือนลงรายจ่าย เหลือแถบบนหน้าหลักบอกว่ามีบิลประจำเดือนค้างกี่รายการ กดแล้วไปหน้าบิล',
+      'กด Enter เพื่อบันทึกได้ทุกหน้าต่าง (ลงเงิน บิล หนี้ กระเป๋า หมวดหมู่ ฯลฯ) แม้กำลังพิมพ์อยู่ในช่อง',
+      'แก้บั๊ก: หน้าหลักเคยเอาเงินกระเป๋าต่างสกุล ($) ไปบวกเป็นบาทในยอด รับ/จ่าย/คงเหลือเดือนนี้ และวงโดนัท — ตอนนี้นับเฉพาะกระเป๋าบาท',
+      'ภาษี: ค่าลดหย่อนตัดตามเพดานจริงแล้ว (ประกันสังคม ประกันชีวิต/สุขภาพ บำนาญ RMF กลุ่มเกษียณรวม 500k Thai ESG ดอกเบี้ยบ้าน ฯลฯ) และเงินบริจาคไม่เกิน 10% ของเงินได้หลังหักลดหย่อน — ช่องที่เกินจะบอกว่ากรอกเท่าไหร่ หักได้จริงเท่าไหร่',
+      'หนี้: ลงจ่าย/รับคืนเกินยอดที่เหลือไม่ได้แล้ว (เดิมส่วนเกินหายไปจากหน้าหนี้)',
+      'หน้าบิล: มีปุ่ม "จ่ายแล้ว / ยกเลิกจ่าย" ในแต่ละบิล — ยกเลิกจ่ายจะลบรายจ่ายที่ลงให้อัตโนมัติด้วย',
+      'เพิ่มปุ่ม "ย้อนกลับ" หลังลบ/ยกเลิกทุกอย่าง (ลบรายการ บิล หนี้ การชำระ กระเป๋า หมวด, เคลียหนี้, จ่าย/ยกเลิกจ่ายบิล) กดได้ภายใน 5 วินาที',
+    ] },
     { v: '0.16', date: '13 ส.ค. 2569', items: [
       'แก้ปัญหาชีตปิดเองตอนลากเลือกข้อความ — เดิมถ้าลากคลุมข้อความในกรอบแล้วปล่อยเมาส์เลยขอบออกไปข้างนอก ชีตจะปิดทันทีทั้งที่ไม่ได้ตั้งใจ ตอนนี้ต้องกดลงและปล่อยบนพื้นที่มืดนอกกรอบทั้งคู่เท่านั้นถึงจะปิด (กดปุ่ม Esc หรือปาดลงปิดยังใช้ได้เหมือนเดิม)',
     ] },
@@ -266,7 +280,7 @@
       <span class="wallet-bal num" style="color:${bal < 0 ? 'var(--expense)' : 'var(--ink)'}"> ${balStr}</span></div>`;
   }
   // ยอดเงินพร้อมสัญลักษณ์สกุล — ติดลบให้ขึ้นเครื่องหมายหน้าสัญลักษณ์ (-฿1,820 ไม่ใช่ ฿-1,820)
-  const money = (n, cur) => (n < 0 ? '-' : '') + currSymbol(cur || 'THB') + fmt(Math.abs(n));
+  const money = (n, cur) => (r2(n) < 0 ? '-' : '') + currSymbol(cur || 'THB') + fmt(Math.abs(n));
   // ชิปเลือกกระเป๋า — โชว์ยอดคงเหลือติดไว้ในชิปด้วย จะได้ไม่ต้องออกไปดูหน้ากระเป๋า
   const walletChips = (sel, fn, thbOnly) => S.wallets().filter((w) => w.enabled !== false && ((w.currency || 'THB') === 'THB' || (!thbOnly && S.settings().foreignIncomeEnabled))).map((w) => {
     const cur = w.currency || 'THB'; const b = S.walletBalance(w.id);
@@ -279,9 +293,11 @@
   function renderHome() {
     const adv = mode() === 'advanced';
     const ym = ymKey(now.getFullYear(), now.getMonth());
-    const list = S.txInMonth(ym); const t = S.totals(list);
+    // นับเฉพาะกระเป๋าบาท — ไม่งั้น $ จะถูกบวกเป็น ฿ (กระเป๋าต่างสกุลดูแยกในหน้าประวัติ)
+    const isTHB = (x) => { const w = S.wallet(x.walletId); return !w || (w.currency || 'THB') === 'THB'; };
+    const list = S.txInMonth(ym).filter(isTHB); const t = S.totals(list);
     const up = S.upcomingBills();
-    const recent = S.transactions().filter((x) => S.monthKey(x.date) === ym).slice(0, 6);
+    const recent = S.transactions().filter((x) => S.monthKey(x.date) === ym).slice(0, 6); // ล่าสุดโชว์ทุกสกุล (แต่ละแถวมีสัญลักษณ์สกุลของมัน)
     const heroVal = adv ? S.totalBalance() : t.balance;
 
     const upHtml = up.map((b) => {
@@ -305,7 +321,7 @@
           <div class="avatar" style="color:${w.color}">${icon(w.icon)}</div>
           <div class="body"><div class="t">${esc(w.name)} <span class="badge" style="background:var(--trust)">${cur}</span></div>
           <div class="s">กดเพื่อ ฝาก/ถอน แปลงสกุล</div></div>
-          <span class="wallet-bal num" style="color:${bal < 0 ? 'var(--expense)' : 'var(--ink)'}"> ${currSymbol(cur)}${fmt(bal)} ${cur}</span></div>`;
+          <span class="wallet-bal num" style="color:${bal < 0 ? 'var(--expense)' : 'var(--ink)'}"> ${money(bal, cur)} ${cur}</span></div>`;
       }).join('')}`;
     }
 
@@ -323,7 +339,13 @@
     } }
 
     // .cols/.col: มือถือ = display:contents (เหมือนไม่มีตัวห่อ), จอ ≥900px = แบ่ง 2 คอลัมน์
+    const pend = pendingBills();
+    const pendHtml = pend.length ? `<button class="card" onclick="App.go('bills')" style="display:flex;align-items:center;gap:10px;width:100%;margin-top:12px;text-align:left;cursor:pointer;border:1px solid var(--expense);color:var(--ink);font:inherit">
+        <span style="color:var(--expense)">${icon('i-bell')}</span>
+        <div style="flex:1"><div style="font-weight:700">มีบิลประจำเดือนค้าง ${pend.length} รายการ</div>
+        <div style="font-size:12px;color:var(--muted)">${esc(pend.slice(0, 3).map((b) => b.name).join(', '))}${pend.length > 3 ? ' …' : ''}</div></div>${icon('i-chev', 'sm')}</button>` : '';
     $('#screen-home').innerHTML = `<div class="cols"><div class="col">
+      ${pendHtml}
       <div class="hero-label">${adv ? 'เงินทั้งหมด' : 'คงเหลือเดือนนี้'}</div>
       <div class="hero-amount"><span class="baht num">฿</span><span class="val num ${heroVal < 0 ? 'neg' : ''}">${fmt(heroVal)}</span></div>
       <div class="pills"><div class="pill inc">${icon('i-up', 'sm')} รับ <span class="num">${fmt(t.income)}</span></div>
@@ -449,7 +471,7 @@
       ${walChips}
       ${summaryHtml}
       ${donutCard(donutList)}
-      <div style="margin-top:12px"><input class="input" placeholder="ค้นหา note หรือหมวดหมู่…" value="${esc(hist.search)}" oninput="App.histSearch(this.value)"></div>
+      <div style="margin-top:12px"><input class="input" id="histSearch" enterkeyhint="search" placeholder="ค้นหา note หรือหมวดหมู่…" value="${esc(hist.search)}" oninput="App.histSearch(this.value)" onkeydown="if(event.key==='Enter')this.blur()"></div>
       <div class="wrap-chips" style="margin-top:8px">
         <span class="cchip${hist.typeFilter === 'all' ? ' on' : ''}" onclick="App.histType('all')">ทั้งหมด</span>
         <span class="cchip${hist.typeFilter === 'income' ? ' on' : ''}" onclick="App.histType('income')">รายรับ</span>
@@ -474,9 +496,12 @@
       else if (b.daysLeft <= 1) { s = `ทุกวันที่ ${b.dueDay} · ยังไม่จ่าย · ${b.daysLeft < 0 ? 'เลยกำหนด' : b.daysLeft === 0 ? 'ครบวันนี้' : 'อีก 1 วัน'}`; scls = 's-warn'; }
       else { s = `ทุกวันที่ ${b.dueDay} · ยังไม่จ่าย`; scls = 's-mut'; }
       const amt = b.variable ? `<span style="color:var(--muted);font-size:13px">ผันแปร</span>` : `<span class="num" ${!b.enabled ? 'style="color:var(--muted)"' : ''}>฿${fmt(b.amount)}</span>`;
+      const payBtn = !b.enabled ? '' : b.paid
+        ? `<button class="btn-pay" style="background:var(--surface-hi);color:var(--muted);margin-left:8px" onclick="event.stopPropagation();App.payBill('${b.id}','${b.ym}')">ยกเลิกจ่าย</button>`
+        : `<button class="btn-pay" style="margin-left:8px" onclick="event.stopPropagation();App.payBill('${b.id}','${b.ym}')">จ่ายแล้ว</button>`;
       return `<div class="card" style="margin-top:8px${!b.enabled ? ';opacity:.6' : ''}" onclick="App.openBill('${b.id}')"><div class="rowitem" style="padding:2px 0">
         <div class="avatar" style="color:${b.enabled ? (c ? c.color : 'var(--trust)') : 'var(--muted)'}">${icon(c ? c.icon : 'i-receipt')}</div>
-        <div class="body"><div class="t">${esc(b.name)}</div><div class="s ${scls}">${s}</div></div>${amt}</div></div>`;
+        <div class="body"><div class="t">${esc(b.name)}</div><div class="s ${scls}">${s}</div></div>${amt}${payBtn}</div></div>`;
     }).join('');
     $('#screen-bills').innerHTML = `<div style="height:8px"></div>${html}`;
   }
@@ -607,7 +632,9 @@
       const dedRows = [
         ['ค่าใช้จ่าย 50% (สูงสุด ฿100,000)', ts.expenseDeduction],
         ['ลดหย่อนส่วนตัว', ts.personalDeduction],
-        ...DED_FIELDS.map(([k, lbl]) => { const v = ded[k] || 0; return v ? [lbl, k === 'donationEdu' ? v * 2 : v] : null; }),
+        // ยอดที่หักได้จริงหลังตัดเพดาน — ถ้าโดนตัดโชว์ยอดที่กรอกไว้ด้วย
+        ...DED_FIELDS.map(([k, lbl]) => { const raw = (Number(ded[k]) || 0) * (k === 'donationEdu' ? 2 : 1); if (!raw) return null;
+          const got = (ts.dedApplied || {})[k] || 0; return [lbl + (got < raw ? ` <small style="color:var(--muted)">(กรอก ฿${fmt(raw)} · เกินเพดาน)</small>` : ''), got]; }),
       ].filter(Boolean).map(([label, val]) => `<div class="tax-row"><span>${label}</span><span class="num">-฿${fmt(val)}</span></div>`).join('');
 
       html += `
@@ -801,11 +828,6 @@
   function renderSettings() {
     const st = S.settings(); const adv = mode() === 'advanced';
     const fxMissing = S.fxIncomeMissingRate().length;
-    const canNotify = 'Notification' in window;
-    const notifyOn = !!st.notifyEnabled && canNotify && Notification.permission === 'granted';
-    let notifyDesc = 'เด้งเตือนบิล/ลงรายจ่ายเป็นแจ้งเตือนของเครื่อง ตอนเปิดแอป';
-    if (!canNotify) notifyDesc = isIOS() && !isStandalone() ? 'iPhone/iPad ต้องติดตั้งแอปลงหน้าจอโฮมก่อน' : 'เบราว์เซอร์นี้ไม่รองรับ';
-    else if (Notification.permission === 'denied') notifyDesc = 'ถูกปิดกั้น — เปิดสิทธิ์แจ้งเตือนในตั้งค่าเบราว์เซอร์/ระบบก่อน';
     const theme = localStorage.getItem(S.THEME_KEY) || 'system';
     const palette = localStorage.getItem(S.PALETTE_KEY) || 'default';
     const tseg = (val, txt) => `<button class="seg seg-sm ${theme === val ? 'on-trust' : ''}" onclick="App.setTheme('${val}')">${txt}</button>`;
@@ -822,10 +844,6 @@
       <button class="set-item" onclick="App.go('bills')"><span class="ic">${icon('i-bell')}</span><div class="body"><div class="t">บิลประจำ</div><div class="s">เพิ่ม/แก้บิล และตั้งการเตือน</div></div>${icon('i-chev', 'sm')}</button>
       ${adv ? `<button class="set-item" onclick="App.go('wallets')"><span class="ic">${icon('i-bank')}</span><div class="body"><div class="t">กระเป๋าเงิน</div><div class="s">หลายกระเป๋า, ยอดตั้งต้น, ตั้งเริ่มต้น</div></div>${icon('i-chev', 'sm')}</button>` : ''}
       <button class="set-item" onclick="App.go('categories')"><span class="ic">${icon('i-grid')}</span><div class="body"><div class="t">จัดการหมวดหมู่</div><div class="s">เพิ่ม/ลบ/แก้ชื่อ และจัดเรียง</div></div>${icon('i-chev', 'sm')}</button>
-      <div class="set-item"><span class="ic">${icon('i-clock')}</span><div class="body"><div class="t">เวลาเตือนลงรายจ่าย</div><div class="s">แจ้งเตือนเมื่อเปิดแอปหลังเวลานี้</div></div>
-        <input class="input num" type="time" style="width:110px" value="${st.reminderTime || '20:00'}" onchange="App.setReminderTime(this.value)"></div>
-      <div class="set-item"><span class="ic">${icon('i-bell')}</span><div class="body"><div class="t">แจ้งเตือนระบบ</div><div class="s">${notifyDesc}</div></div>
-        <button class="sw-ui ${notifyOn ? 'on' : ''}" onclick="App.setNotifyEnabled()"></button></div>
 
       <div class="divider"></div>
       <div class="set-head">หน้าตา</div>
@@ -1108,10 +1126,11 @@
      ========================================================= */
   function openWallet(id) {
     const w = id ? S.wallet(id) : null;
-    wal = w ? { ...w } : { id: null, name: '', icon: 'i-wallet', color: '#34D399', currency: 'THB', enabled: true, openingBalance: 0 };
+    // ช่องยอดเงินโชว์ "ยอดตอนนี้" (nowBal) ไม่ใช่ openingBalance ดิบ — ตอนบันทึกค่อยคิดย้อนเป็นยอดตั้งต้น ไม่งั้นกรอกยอดจริงแล้วจะทบกับรายการซ้ำ
+    wal = w ? { ...w, nowBal: S.walletBalance(w.id) } : { id: null, name: '', icon: 'i-wallet', color: '#34D399', currency: 'THB', enabled: true, nowBal: 0 };
     renderWalletEdit();
   }
-  function walCapture() { const n = $('#walName'); if (n) wal.name = n.value; const o = $('#walOpen'); if (o) wal.openingBalance = o.value; }
+  function walCapture() { const n = $('#walName'); if (n) wal.name = n.value; const o = $('#walOpen'); if (o) wal.nowBal = o.value; }
   function renderWalletEdit() {
     const icons = ICON_CHOICES.map((ic) => `<button class="chip" style="width:52px;${ic === wal.icon ? 'border-color:var(--trust)' : ''}" onclick="App.walIcon('${ic}')">${icon(ic)}</button>`).join('');
     const colors = COLOR_CHOICES.map((col) => `<button onclick="App.walColor('${col}')" style="width:30px;height:30px;border-radius:50%;background:${col};border:3px solid ${col === wal.color ? 'var(--ink)' : 'transparent'};cursor:pointer"></button>`).join('');
@@ -1120,7 +1139,7 @@
         ${wal.id ? `<button class="icon-btn" style="color:var(--danger)" onclick="App.delWallet('${wal.id}')">${icon('i-trash')}</button>` : ''}</div>
       <div class="field-label">ชื่อกระเป๋า</div><input class="input" id="walName" value="${esc(wal.name)}" placeholder="เช่น PayPal หรือ กสิกรไทย">
       <div class="field-label">สกุลเงิน</div><div class="wrap-chips">${curChips}</div>
-      ${(wal.currency || 'THB') === 'THB' ? `<div class="field-label">ยอดตั้งต้น (เงินที่มีอยู่ตอนนี้)</div><input class="input num" id="walOpen" inputmode="decimal" value="${wal.openingBalance || 0}">` : `<div class="field-label" style="color:var(--muted);font-size:12px">กระเป๋าต่างประเทศ — ยอดเริ่มต้น 0 (ลงรายรับเพื่อเพิ่มยอด)</div>`}
+      ${(wal.currency || 'THB') === 'THB' ? `<div class="field-label">ยอดเงินในกระเป๋าตอนนี้</div><input class="input num" id="walOpen" inputmode="decimal" value="${wal.nowBal || 0}">` : `<div class="field-label" style="color:var(--muted);font-size:12px">กระเป๋าต่างประเทศ — ยอดเริ่มต้น 0 (ลงรายรับเพื่อเพิ่มยอด)</div>`}
       <div class="field-label">ไอคอน</div><div class="chips" style="flex-wrap:wrap">${icons}</div>
       <div class="field-label">สี</div><div class="wrap-chips" style="gap:10px">${colors}</div>
       <div class="switch-row"><div class="txt"><div class="t">เปิดใช้งานกระเป๋านี้</div><div class="s">ปิด = ซ่อนจากฟอร์มและหน้าหลัก (ข้อมูลยังอยู่)</div></div><button class="sw-ui ${wal.enabled !== false ? 'on' : ''}" onclick="App.walToggleEdit()"></button></div>
@@ -1259,48 +1278,29 @@
     toast('บันทึกแล้ว ✓ — ลงต่อได้เลย');
   }
   let toastTimer;
-  function toast(msg) { const el = $('#toast'); el.textContent = msg; el.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 1800); }
+  function toast(msg, undo) {
+    const el = $('#toast'); el.textContent = msg;
+    el.classList.toggle('has-undo', !!undo);
+    if (undo) {
+      const b = document.createElement('button'); b.className = 'toast-undo'; b.textContent = 'ย้อนกลับ';
+      b.onclick = () => { clearTimeout(toastTimer); el.classList.remove('show', 'has-undo'); undo(); };
+      el.appendChild(b);
+    }
+    el.classList.add('show'); clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show', 'has-undo'), undo ? 5000 : 1800);
+  }
+  // ทำสิ่งที่ลบ/ยกเลิกได้ → โชว์ toast พร้อมปุ่ม "ย้อนกลับ" คืนข้อมูลทั้งก้อนเป็นสภาพก่อนกด
+  function undoable(msg, fn) {
+    const snap = S.snapshot(); fn();
+    toast(msg, () => { S.restore(snap); buildNav(); closeSheet(); render(current); toast('ย้อนกลับแล้ว'); });
+  }
 
   /* =========================================================
-     REMINDERS — เช็คตอนเปิดแอป/กลับมาที่แท็บ เตือนเรื่องละครั้งต่อวัน
-     (บิลตาม reminderDays ของแต่ละบิล + ลงรายจ่ายหลัง reminderTime)
+     REMINDERS — เตือนในแอปอย่างเดียว: แถบบนหน้าหลักบอกจำนวนบิลประจำเดือนที่ค้าง
+     (ยังไม่จ่าย และเลยกำหนด/เข้าช่วงวันเตือนล่วงหน้าของบิลนั้นแล้ว)
      ========================================================= */
-  const NOTIFIED_KEY = 'ngern.notified';
-  function dueReminders() {
-    const msgs = [];
-    for (const b of S.billsWithStatus()) {
-      if (!b.enabled || b.paid) continue;
-      const maxRem = Math.max(0, ...(b.reminderDays || []));
-      if (b.daysLeft > maxRem) continue;
-      const when = b.daysLeft < 0 ? `เลยกำหนดมา ${-b.daysLeft} วัน` : b.daysLeft === 0 ? 'ครบกำหนดวันนี้' : `ครบกำหนดในอีก ${b.daysLeft} วัน`;
-      msgs.push({ key: 'bill:' + b.id, text: `บิล "${b.name}" ${when}` + (b.variable ? '' : ` (฿${fmt(b.amount)})`) });
-    }
-    const [hh, mm] = (S.settings().reminderTime || '20:00').split(':').map(Number);
-    const d = new Date();
-    const today = S.todayISO();
-    const loggedToday = S.transactions().some((t) => t.date === today && t.type === 'expense');
-    if ((d.getHours() > hh || (d.getHours() === hh && d.getMinutes() >= mm)) && !loggedToday)
-      msgs.push({ key: 'expense', text: 'วันนี้ยังไม่ได้ลงรายจ่ายเลย อย่าลืมบันทึกนะ' });
-    return msgs;
-  }
-  function showSysNotification(body) {
-    if (!S.settings().notifyEnabled || !('Notification' in window) || Notification.permission !== 'granted') return;
-    const opts = { body, icon: './icon.svg', tag: 'ngern-reminder' };
-    if (swReg) swReg.showNotification('เงินของฉัน', opts).catch(() => {});
-    else try { new Notification('เงินของฉัน', opts); } catch (e) {}
-  }
-  function checkReminders() {
-    const today = S.todayISO();
-    let seen = null;
-    try { seen = JSON.parse(localStorage.getItem(NOTIFIED_KEY)); } catch (e) {}
-    if (!seen || seen.date !== today) seen = { date: today, keys: [] };
-    const fresh = dueReminders().filter((m) => !seen.keys.includes(m.key));
-    if (!fresh.length) return;
-    seen.keys = seen.keys.concat(fresh.map((m) => m.key));
-    localStorage.setItem(NOTIFIED_KEY, JSON.stringify(seen));
-    showSysNotification(fresh.map((m) => m.text).join('\n'));
-    toast(fresh[0].text + (fresh.length > 1 ? ` · และอีก ${fresh.length - 1} เรื่อง` : ''));
-  }
+  const pendingBills = () => S.billsWithStatus().filter((b) =>
+    b.enabled && !b.paid && b.daysLeft <= Math.max(0, ...(b.reminderDays || [])));
 
   // สีของ status bar (meta theme-color) ต่อ [ชุดสี][โหมด]
   const THEME_COLORS = {
@@ -1321,7 +1321,11 @@
      ========================================================= */
   const App = {
     go, openAdd, openTransfer, openBill, openDebt, openWallet,
-    payBill(id, ym) { S.toggleBillPaid(id, ym); toast('บันทึกว่าจ่ายแล้ว'); render(current); },
+    payBill(id, ym) {
+      const b = S.billsWithStatus().find((x) => x.id === id);
+      undoable(b && b.paid ? 'ยกเลิกจ่ายแล้ว (ลบรายจ่ายที่ลงให้อัตโนมัติ)' : 'บันทึกว่าจ่ายแล้ว', () => S.toggleBillPaid(id, ym));
+      render(current);
+    },
 
     // add sheet
     setKind(k) { add.type = k; if (k !== 'transfer') { const c = S.categories(k).find((x) => x.id === add.categoryId) || S.categories(k)[0]; add.categoryId = c && c.id; } renderAdd(); fxAutoFill(); },
@@ -1368,7 +1372,7 @@
       if (add.id) { closeSheet(); toast('แก้ไขแล้ว'); render(current); return; }
       render(current); add.amount = '0'; add.note = ''; renderAdd(); flashSaved();
     },
-    deleteTx() { if (confirm('ลบรายการนี้?')) { S.deleteTransaction(add.id); closeSheet(); toast('ลบแล้ว'); render(current); } },
+    deleteTx() { if (confirm('ลบรายการนี้?')) { const id = add.id; closeSheet(); undoable('ลบแล้ว', () => S.deleteTransaction(id)); render(current); } },
     quickAddCat() { editCat(); catEdit.type = add.type; catEdit._fromAdd = true; renderCatEdit(); },
 
     // bill
@@ -1385,7 +1389,7 @@
       if (bill.id) S.updateBill(bill.id, payload); else S.addBill(payload);
       closeSheet(); toast('บันทึกบิลแล้ว'); current === 'bills' ? render('bills') : go('bills');
     },
-    deleteBill() { if (confirm('ลบบิลนี้?')) { S.deleteBill(bill.id); closeSheet(); toast('ลบบิลแล้ว'); render('bills'); } },
+    deleteBill() { if (confirm('ลบบิลนี้?')) { const id = bill.id; closeSheet(); undoable('ลบบิลแล้ว', () => S.deleteBill(id)); render('bills'); } },
 
     catTaxable() { catCapture(); catEdit.isTaxable = !catEdit.isTaxable; const sw = $('#swCatTax'); if (sw) sw.classList.toggle('on', catEdit.isTaxable); },
 
@@ -1397,7 +1401,7 @@
       const used = S.all().transactions.some((t) => t.categoryId === id);
       if (used && !confirm('มีรายการใช้หมวดนี้อยู่ ลบต่อ? (รายการเดิมจะไม่มีหมวด)')) return;
       if (!used && !confirm('ลบหมวดนี้?')) return;
-      S.deleteCategory(id); renderCategories();
+      undoable('ลบหมวดแล้ว', () => S.deleteCategory(id)); renderCategories();
     },
     catPickIcon(ic) { catCapture(); catEdit.icon = ic; renderCatEdit(); },
     catPickColor(col) { catCapture(); catEdit.color = col; renderCatEdit(); },
@@ -1423,7 +1427,10 @@
     walSave() {
       const name = ($('#walName') || {}).value; if (!name || !name.trim()) { toast('ใส่ชื่อกระเป๋าก่อน'); return; }
       const cur = wal.currency || 'THB';
-      const opening = cur === 'THB' ? (parseFloat(($('#walOpen') || {}).value) || 0) : 0;
+      // ยอดตั้งต้น = ยอดตอนนี้ที่กรอก − ผลรวมรายการทั้งหมดของกระเป๋า
+      const old = wal.id ? S.wallet(wal.id) : null;
+      const flow = old ? S.walletBalance(old.id) - (old.openingBalance || 0) : 0;
+      const opening = cur === 'THB' ? r2((parseFloat(($('#walOpen') || {}).value) || 0) - flow) : 0;
       const patch = { name: name.trim(), icon: wal.icon, color: wal.color, currency: cur, enabled: wal.enabled !== false, openingBalance: opening };
       if (wal.id) S.updateWallet(wal.id, patch); else S.addWallet(patch);
       closeSheet(); toast('บันทึกกระเป๋าแล้ว'); renderWallets();
@@ -1431,7 +1438,7 @@
     delWallet(id) {
       if (S.wallets().length <= 1) { toast('ต้องมีอย่างน้อย 1 กระเป๋า'); return; }
       if (!confirm('ลบกระเป๋านี้? รายการที่ผูกไว้จะย้ายไปกระเป๋าอื่น')) return;
-      S.deleteWallet(id); closeSheet(); renderWallets();
+      closeSheet(); undoable('ลบกระเป๋าแล้ว', () => S.deleteWallet(id)); renderWallets();
     },
 
     // FX convert
@@ -1488,16 +1495,18 @@
       if (debtE.id) S.updateDebt(debtE.id, patch); else S.addDebt({ ...patch, startWalletId: debtE.startWalletId });
       closeSheet(); toast('บันทึกหนี้แล้ว'); render('debt');
     },
-    deleteDebt() { if (confirm('ลบรายการหนี้นี้?')) { S.deleteDebt(debtE.id); closeSheet(); toast('ลบแล้ว'); render('debt'); } },
+    deleteDebt() { if (confirm('ลบรายการหนี้นี้?')) { const id = debtE.id; closeSheet(); undoable('ลบหนี้แล้ว', () => S.deleteDebt(id)); render('debt'); } },
     openPay(debtId) { pay = { debtId, amount: '', walletId: S.defaultWalletId(), date: S.todayISO() }; openFlags.pay = false; renderPay(); },
     payWallet(id) { const el = $('#payAmount'); if (el) pay.amount = el.value; pay.walletId = id; renderPay(); },
     paySave() {
       const amt = parseFloat($('#payAmount').value) || 0; if (!amt || amt <= 0) { toast('ใส่จำนวนเงิน'); return; }
+      const rem = S.debtRemaining(S.debt(pay.debtId));
+      if (amt > rem + 0.005) { toast(`เกินยอดที่เหลือ (฿${fmt(rem)}) — ถ้าจ่ายเพิ่มจริงให้แก้ยอดหนี้ก่อน`); return; }
       pay.date = $('#payDate').value;
       S.addPayment(pay.debtId, { amount: amt, walletId: pay.walletId, date: pay.date });
       pay = null; toast('บันทึกการชำระแล้ว'); renderDebtEdit();
     },
-    delPayment(debtId, pid) { if (confirm('ลบรายการชำระนี้?')) { S.deletePayment(debtId, pid); renderDebtEdit(); } },
+    delPayment(debtId, pid) { if (confirm('ลบรายการชำระนี้?')) { undoable('ลบการชำระแล้ว', () => S.deletePayment(debtId, pid)); renderDebtEdit(); } },
 
     // เคลียหนี้หลายก้อน (โหมดติ๊กเลือก)
     debtSelectMode(on) { if (on) { debtSelMode = true; debtSel.clear(); } else exitDebtSelect(); renderDebt(); },
@@ -1522,9 +1531,10 @@
     clearDebtsSave() {
       clearCapture();
       const picked = debtSelected(); if (!picked.length) { closeSheet(); return; }
+      const snap = S.snapshot();
       const r = S.clearDebts(picked.map((d) => d.id), { walletId: clearD.walletId, date: clearD.date });
       clearD = null; exitDebtSelect(); closeSheet();
-      toast(`เคลียหนี้ ${r.count} ก้อนแล้ว ✓`);
+      toast(`เคลียหนี้ ${r.count} ก้อนแล้ว`, () => { S.restore(snap); render('debt'); toast('ย้อนกลับแล้ว'); });
       render('debt');
     },
 
@@ -1533,7 +1543,14 @@
     histMonth(dir) { let m = hist.m + dir, y = hist.y; if (m < 0) { m = 11; y--; } if (m > 11) { m = 0; y++; } if (y > now.getFullYear() || (y === now.getFullYear() && m > now.getMonth())) return; hist.m = m; hist.y = y; renderHistory(); },
     histRange() { hist.start = $('#rangeStart').value; hist.end = $('#rangeEnd').value; if (hist.start && hist.end && hist.start > hist.end) { const t = hist.start; hist.start = hist.end; hist.end = t; } renderHistory(); },
     histPreset(p) { const end = new Date(), start = new Date(); if (p === 'year') start.setMonth(0, 1); else start.setDate(end.getDate() - (p - 1)); const iso = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; hist.start = iso(start); hist.end = iso(end); renderHistory(); },
-    histSearch(v) { hist.search = v; renderHistory(); },
+    // พิมพ์ค้นหา → วาดหน้าใหม่ แต่คงตำแหน่งเลื่อน+โฟกัสไว้ และเติมที่ว่างท้ายหน้าถ้าผลสั้นลง กันหน้าดีดขึ้น
+    histSearch(v) {
+      const scr = $('#screen-history'), y = scr.scrollTop, h = scr.scrollHeight;
+      hist.search = v; renderHistory();
+      const gap = h - scr.scrollHeight; if (gap > 0) scr.insertAdjacentHTML('beforeend', `<div style="height:${gap}px"></div>`);
+      scr.scrollTop = y;
+      const i = $('#histSearch'); i.focus({ preventScroll: true }); i.setSelectionRange(v.length, v.length);
+    },
     histType(v) { hist.typeFilter = v; renderHistory(); },
     histWallet(v) { hist.walletId = v; renderHistory(); },
 
@@ -1570,16 +1587,6 @@
 
     // settings
     setMode(v) { S.updateSettings({ mode: v }); buildNav(); if (v === 'simple' && (current === 'debt' || current === 'wallets')) { go('home'); } else { setChrome(current); renderSettings(); } toast('เปลี่ยนโหมดแล้ว'); },
-    setReminderTime(v) { S.updateSettings({ reminderTime: v }); toast('บันทึกเวลาแล้ว'); },
-    async setNotifyEnabled() {
-      if (S.settings().notifyEnabled) { S.updateSettings({ notifyEnabled: false }); renderSettings(); toast('ปิดแจ้งเตือนระบบแล้ว'); return; }
-      if (!('Notification' in window)) { toast(isIOS() && !isStandalone() ? 'ต้องติดตั้งแอปลงหน้าจอโฮมก่อน ถึงเปิดแจ้งเตือนได้' : 'เบราว์เซอร์นี้ไม่รองรับการแจ้งเตือน'); return; }
-      const perm = await Notification.requestPermission();
-      if (perm !== 'granted') { renderSettings(); toast('ยังไม่ได้รับอนุญาต — เปิดสิทธิ์แจ้งเตือนในตั้งค่าเบราว์เซอร์'); return; }
-      S.updateSettings({ notifyEnabled: true }); renderSettings();
-      showSysNotification('เปิดการแจ้งเตือนแล้ว ✓ จะเตือนบิลใกล้ครบกำหนดและการลงรายจ่ายตอนเปิดแอป');
-      toast('เปิดแจ้งเตือนระบบแล้ว ✓');
-    },
     setTheme(v) { localStorage.setItem(S.THEME_KEY, v); applyTheme(v); renderSettings(); },
     setPalette(v) { localStorage.setItem(S.PALETTE_KEY, v); applyTheme(localStorage.getItem(S.THEME_KEY) || 'system'); renderSettings(); },
     exportData() { const blob = new Blob([S.exportJSON()], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `ngern-backup-${S.todayISO()}.json`; a.click(); URL.revokeObjectURL(a.href); toast('ส่งออกแล้ว'); },
@@ -1640,14 +1647,20 @@
   document.addEventListener('keydown', (e) => {
     if (!$('#overlay .sheet-dim')) return;
     if (e.key === 'Escape') { App.closeSheet(); return; }
-    if (!$('#amtVal')) return; // เฉพาะชีตลงเงิน (มี keypad)
     const el = document.activeElement;
+    // Enter = กดปุ่มบันทึกของชีตที่เปิดอยู่ (ใช้ได้ทุกหน้าต่าง แม้กำลังพิมพ์ในช่อง/เพิ่งกดปุ่ม keypad) — ยกเว้น textarea / กำลังพิมพ์ IME
+    if (e.key === 'Enter' && !e.isComposing) {
+      if (el && el.tagName === 'TEXTAREA') return;
+      const btn = $('#overlay .save, #overlay .btn-primary');
+      if (btn) { e.preventDefault(); if (el && el.blur) el.blur(); btn.click(); }
+      return;
+    }
+    if (!$('#amtVal')) return; // เฉพาะชีตลงเงิน (มี keypad)
     if (el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return; // กำลังพิมพ์โน้ต/วันที่อยู่
     const digit = /^(?:Digit|Numpad)(\d)$/.exec(e.code);
     if (digit) { e.preventDefault(); App.key(digit[1]); }
     else if (e.code === 'Period' || e.code === 'NumpadDecimal') { e.preventDefault(); App.key('.'); }
     else if (e.key === 'Backspace') { e.preventDefault(); App.key('bs'); }
-    else if (e.key === 'Enter') { e.preventDefault(); App.saveTx(); }
   });
 
   // ล้อเมาส์เลื่อนแถบแนวนอน (เช่น แถวหมวดหมู่ตอนจอแคบ) ได้โดยไม่ต้องกด Shift
@@ -1677,14 +1690,9 @@
           if (nw.state === 'installed' && navigator.serviceWorker.controller) { App._waiting = nw; $('#updateBanner').hidden = false; }
         });
       });
-      checkReminders();
-    }).catch(() => { checkReminders(); });
+    }).catch(() => {});
     let reloaded = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => { if (!reloaded) { reloaded = true; location.reload(); } });
-  } else {
-    checkReminders();
   }
 
-  // กลับมาที่แท็บ/เปิดแอปจากพื้นหลัง → เช็คเตือนอีกรอบ (เรื่องที่เตือนแล้ววันนี้จะไม่ซ้ำ)
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) checkReminders(); });
 })();
