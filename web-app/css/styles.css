@@ -9,7 +9,7 @@
   --divider:#e6e6e6; --rule:#f1f1f1; --control:#d6d9dd;
   --ink:#1b1d1f; --muted:#5c6064; --trust:#1d5fd6; --on-trust:#ffffff;
   --primary:#1b1d1f; --on-primary:#ffffff;
-  --income:#2f7a45; --expense:#c41c29; --danger:#c41c29; --spend:#D9691C;
+  --income:#2f7a45; --expense:#c41c29; --danger:#c41c29; --spend:#D9691C; --on-color:#ffffff;
   --track:#e9edf1; --committed:#a9c6f2;
   --neg-bg:#ffedea; --neg-ink:#831c1e; --warn-bg:#fffbeb; --warn-ink:#92400e; --ok-bg:#dcfae5; --ok-ink:#04250e;
   --shadow:rgba(0,0,0,.12);
@@ -21,7 +21,7 @@
   --divider:#262626; --rule:#1a1a1a; --control:#444444;
   --ink:#ffffff; --muted:#b4b4b4; --trust:#6b9cf0; --on-trust:#000000;
   --primary:#ffffff; --on-primary:#000000;
-  --income:#3fc07a; --expense:#e5566f; --danger:#e5566f; --spend:#FB923C;
+  --income:#3fc07a; --expense:#e5566f; --danger:#e5566f; --spend:#FB923C; --on-color:#111111;
   --track:#222222; --committed:#2f4f86;
   --neg-bg:#2c1a20; --neg-ink:#ff9aa8; --warn-bg:#2a2010; --warn-ink:#f5c46b; --ok-bg:#172a1d; --ok-ink:#3fc07a;
   --shadow:rgba(0,0,0,.5);
@@ -36,7 +36,7 @@
   --divider:#24365F; --rule:#1C2C50; --control:#3A5084;
   --ink:#F5F7FF; --muted:#9FB3DE; --trust:#FFC200; --on-trust:#10254B;
   --primary:#FFC200; --on-primary:#10254B;
-  --income:#34D399; --expense:#F87171; --danger:#F87171; --spend:#FB923C;
+  --income:#34D399; --expense:#F87171; --danger:#F87171; --spend:#FB923C; --on-color:#0B1730;
   --track:#22325A; --committed:#6FD3E8;
   --neg-bg:#3A1C2A; --neg-ink:#FFB3B3; --warn-bg:#33290F; --warn-ink:#FFD866; --ok-bg:#123A2C; --ok-ink:#34D399;
   --comet:#6FD3E8;
@@ -46,7 +46,7 @@
   --divider:#CFE0F5; --rule:#E3EDF9; --control:#B8CDEB;
   --ink:#10254B; --muted:#5B6E99; --trust:#B07F00; --on-trust:#FFFFFF;
   --primary:#10254B; --on-primary:#FFFFFF;
-  --income:#0E7A55; --expense:#C41C29; --danger:#C41C29; --spend:#D9691C;
+  --income:#0E7A55; --expense:#C41C29; --danger:#C41C29; --spend:#D9691C; --on-color:#ffffff;
   --track:#DCEBFB; --committed:#368ACE;
   --neg-bg:#FFE9E4; --neg-ink:#8A2414; --warn-bg:#FFF6D6; --warn-ink:#7A5300; --ok-bg:#DCFAE5; --ok-ink:#04250e;
   --comet:#368ACE;
@@ -193,11 +193,11 @@ button { font-family:inherit; }
 
 .toggle { background:var(--surface-hi); border-radius:999px; padding:3px; display:flex; gap:2px; }
 .seg { flex:1; height:38px; border-radius:999px; display:grid; place-items:center; font-weight:500; font-size:15px; color:var(--muted); cursor:pointer; border:none; background:none; font-family:inherit; }
-/* แท็บสี: จ่าย = ส้ม, รับ = เขียว, โอน = สีหลัก (พื้นอ่อน + ตัวหนังสือสีเดียวกัน แบบเดิม) */
+/* แท็บสี: พื้นทึบ — จ่าย = ส้ม, รับ = เขียว, โอน = สีหลัก; ตัวหนังสือขาว (สว่าง) / เข้ม (มืด) */
 .seg.on-exp, .seg.on-inc, .seg.on-trust { font-weight:600; }
-.seg.on-exp { background:color-mix(in srgb, var(--spend) 18%, transparent); color:var(--spend); }
-.seg.on-inc { background:color-mix(in srgb, var(--income) 18%, transparent); color:var(--income); }
-.seg.on-trust { background:color-mix(in srgb, var(--trust) 18%, transparent); color:var(--trust); }
+.seg.on-exp { background:var(--spend); color:var(--on-color); }
+.seg.on-inc { background:var(--income); color:var(--on-color); }
+.seg.on-trust { background:var(--trust); color:var(--on-trust); }
 
 
 
